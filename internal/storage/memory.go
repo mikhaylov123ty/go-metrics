@@ -1,6 +1,8 @@
 package storage
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type MemoryStorage struct {
 	metrics map[string]*Data
@@ -15,18 +17,21 @@ func (m *MemoryStorage) Create(query *Data) error {
 
 	m.metrics[id] = query
 
-	fmt.Println(m.metrics)
 	fmt.Println(m.metrics[id])
 
 	return nil
 }
 
 func (m *MemoryStorage) Read(id string) (*Data, error) {
-	return m.metrics[id], nil
+	res, ok := m.metrics[id]
+	if !ok {
+		return nil, nil
+	}
+
+	return res, nil
 }
 
-func (m *MemoryStorage) Update(query *Data) error {
-	id := query.UniqueId()
+func (m *MemoryStorage) Update(id string, query *Data) error {
 
 	m.metrics[id] = query
 
