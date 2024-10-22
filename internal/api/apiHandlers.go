@@ -34,7 +34,7 @@ func (h Handlers) Update(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	id := query.UniqueId()
+	id := query.UniqueID()
 
 	if query.Type == "counter" {
 		prev, err := h.repo.Read(id)

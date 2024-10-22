@@ -13,7 +13,7 @@ func NewMemoryStorage() Storage {
 }
 
 func (m *MemoryStorage) Create(query *Data) error {
-	id := query.UniqueId()
+	id := query.UniqueID()
 
 	m.metrics[id] = query
 

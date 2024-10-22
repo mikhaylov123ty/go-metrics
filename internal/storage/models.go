@@ -16,7 +16,7 @@ type Data struct {
 	Value any
 }
 
-func (d *Data) UniqueId() string {
+func (d *Data) UniqueID() string {
 	return d.Type + "_" + d.Name
 }
 
