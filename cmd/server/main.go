@@ -10,9 +10,8 @@ func main() {
 	storageInstance := storage.NewMemoryStorage()
 
 	// Инициализация инстанса сервера
-	serverInstance := server.New(":8080", &storageInstance)
+	serverInstance := server.New(&storageInstance)
 
 	// Запуск сервера
-	serverInstance.Start()
-
+	serverInstance.Start(":8080")
 }

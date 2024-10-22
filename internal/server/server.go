@@ -2,33 +2,39 @@ package server
 
 import (
 	"log"
+	"net/http"
+
 	"metrics/internal/api"
 	"metrics/internal/storage"
-	"net/http"
 )
 
+// Структура сервера
 type Server struct {
-	port    string
 	storage *storage.Storage
 }
 
-func New(port string, storage *storage.Storage) *Server {
-	return &Server{port: port, storage: storage}
+// Конструктор инстанса сервера
+func New(storage *storage.Storage) *Server {
+	return &Server{storage: storage}
 }
 
-func (s *Server) Start() {
+// Метод запуска сервера
+func (s *Server) Start(port string) {
 	mux := http.NewServeMux()
 
-	handlers := api.NewHandlers(*s.storage)
+	handler := api.NewHandler(*s.storage)
 
-	s.addHandlers(mux, handlers)
+	s.addHandlers(mux, handler)
 
-	if err := http.ListenAndServe(":8080", mux); err != nil {
+	// Старт сервера
+	log.Printf("Starting server on port %s", port)
+	if err := http.ListenAndServe(port, mux); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func (s *Server) addHandlers(mux *http.ServeMux, handlers *api.Handlers) {
-	mux.HandleFunc("POST /update/{type}/{name}/{value}", handlers.Update)
+// Наполнение сервера методами хендлера
+func (s *Server) addHandlers(mux *http.ServeMux, handler *api.Handler) {
+	mux.HandleFunc("POST /update/{type}/{name}/{value}", handler.Update)
 
 }
