@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
@@ -48,8 +47,6 @@ func (h Handlers) Update(w http.ResponseWriter, req *http.Request) {
 			query.Value = prev.Value.(int64) + query.Value.(int64)
 		}
 	}
-
-	fmt.Println(query)
 
 	if err := h.repo.Create(query); err != nil {
 		log.Println(err)
