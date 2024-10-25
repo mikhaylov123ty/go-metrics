@@ -71,5 +71,7 @@ func (h Handler) Update(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "text/plain")
+	//w.Header().Add("Content-Length", req.URL.Path)
 	w.WriteHeader(http.StatusOK)
 }
