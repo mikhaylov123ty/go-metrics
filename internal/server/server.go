@@ -4,7 +4,7 @@ import (
 	"log"
 	"net/http"
 
-	"metrics/internal/api"
+	"metrics/internal/server/api"
 	"metrics/internal/storage"
 )
 
@@ -22,9 +22,8 @@ func New(storage *storage.Storage) *Server {
 func (s *Server) Start(port string) {
 	mux := http.NewServeMux()
 
-	handler := api.NewHandler(*s.storage)
-
-	s.addHandlers(mux, handler)
+	// Назначение соответствий хендлеров
+	s.addHandlers(mux, api.NewHandler(*s.storage))
 
 	// Старт сервера
 	log.Printf("Starting server on port %s", port)
@@ -35,6 +34,6 @@ func (s *Server) Start(port string) {
 
 // Наполнение сервера методами хендлера
 func (s *Server) addHandlers(mux *http.ServeMux, handler *api.Handler) {
+	// /update/
 	mux.HandleFunc("POST /update/{type}/{name}/{value}", handler.Update)
-
 }

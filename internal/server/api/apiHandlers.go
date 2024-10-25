@@ -2,9 +2,8 @@ package api
 
 import (
 	"log"
-	"net/http"
-
 	"metrics/internal/storage"
+	"net/http"
 )
 
 // Структура запроса
@@ -41,7 +40,7 @@ func (h Handler) Update(w http.ResponseWriter, req *http.Request) {
 		req.PathValue("value"),
 	)
 	if err != nil {
-		log.Println(err)
+		log.Println("update handler error:", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -49,29 +48,14 @@ func (h Handler) Update(w http.ResponseWriter, req *http.Request) {
 	// Формирование уникального идентификатора
 	query.id = query.data.UniqueID()
 
-	// Проверка предыдущего значения, если тип "counter"
-	if query.data.Type == "counter" {
-		prevData, err := h.repo.Read(query.id)
-		if err != nil {
-			log.Println(err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		// Сложение значений, если найдено в хранилище
-		if prevData != nil {
-			query.data.Value = prevData.Value.(int64) + query.data.Value.(int64)
-		}
-	}
-
 	// Обновление или сохранение новой записи в хранилище
 	if err = h.repo.Update(query.id, query.data); err != nil {
-		log.Println(err)
+		log.Println("update handler error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/plain")
-	//w.Header().Add("Content-Length", req.URL.Path)
+	// Назначение хедера и статуса
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 }

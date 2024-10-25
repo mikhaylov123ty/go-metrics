@@ -1,45 +1,79 @@
 package client
 
 import (
-	"fmt"
+	"log"
 	"math/rand/v2"
 	"net/http"
 	"runtime"
+	"strconv"
+	"time"
 )
 
+// Временное решение до реализации конфига
+const (
+	pollInterval   = 2 * time.Second
+	reportInterval = 10 * time.Second
+)
+
+// Структура агента
 type Agent struct {
-	BaseUrl string
+	BaseURL string
 	Client  *http.Client
 	Stats   Stats
 }
 
-func NewAgent(baseUrl string) *Agent {
+// Конструктор агента
+func NewAgent(baseURL string) *Agent {
 	return &Agent{
-		BaseUrl: baseUrl,
+		BaseURL: baseURL,
 		Client:  http.DefaultClient,
 	}
 }
 
-func (a *Agent) PostUpdate(metricType string, metricName string, metricValue string) *http.Response {
-	request, err := http.NewRequest("POST", a.BaseUrl+"update/"+metricType+"/"+metricName+"/"+metricValue, nil)
+// Запуск агента
+func (a *Agent) Run() {
+	// Запуск горутины по сбору метрик с интервалом pollInterval
+	go func() {
+		for {
+			a.collectMetrics()
+
+			time.Sleep(pollInterval)
+		}
+	}()
+
+	// Запуск бесконечного цикла отправки метрики с интервалом reportInterval
+	for {
+		a.sendMetrics()
+
+		time.Sleep(reportInterval)
+	}
+}
+
+// Метод отправки запроса "POST /update/{type}/{name}/{value}"
+func (a *Agent) postUpdate(metricType string, metricName string, metricValue string) *http.Response {
+	// Формирования запроса
+	request, err := http.NewRequest("POST", a.BaseURL+"update/"+metricType+"/"+metricName+"/"+metricValue, nil)
 	if err != nil {
-		fmt.Println(err)
+		log.Println("post update error:", err)
 	}
 	request.Header.Set("Content-Type", "text/plain")
 
+	// Выполнение запроса
 	resp, err := a.Client.Do(request)
 	if err != nil {
-		fmt.Println(err)
+		log.Println("post update error:", err)
 	}
-	//fmt.Println(resp)
 
 	return resp
 }
 
-func (a *Agent) CollectData() {
+// Метод сбора метрик
+func (a *Agent) collectMetrics() {
+	// Чтение метрик
 	rt := &runtime.MemStats{}
 	runtime.ReadMemStats(rt)
 
+	// Присвоение полей для каждой метрики
 	a.Stats.Gauge.Alloc = float64(rt.Alloc)
 	a.Stats.Gauge.BuckHashSys = float64(rt.BuckHashSys)
 	a.Stats.Gauge.Frees = float64(rt.Frees)
@@ -67,7 +101,25 @@ func (a *Agent) CollectData() {
 	a.Stats.Gauge.StackSys = float64(rt.StackSys)
 	a.Stats.Gauge.Sys = float64(rt.Sys)
 	a.Stats.Gauge.TotalAlloc = float64(rt.TotalAlloc)
+
+	// Генерация произвольного значения
 	a.Stats.Gauge.RandomValue = rand.Float64()
 
+	// Увеличение счетчика
 	a.Stats.Counter.PollCount++
+}
+
+// Метод отправки метрик
+func (a *Agent) sendMetrics() {
+	stats, err := a.Stats.Map()
+	if err != nil {
+		log.Println("error convert stats to map: ", err)
+	}
+
+	for types, typesData := range stats {
+		for k, v := range typesData.(map[string]interface{}) {
+			vStr := strconv.FormatFloat(v.(float64), 'f', -1, 64)
+			a.postUpdate(types, k, vStr)
+		}
+	}
 }

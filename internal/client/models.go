@@ -5,11 +5,13 @@ import (
 	"fmt"
 )
 
+// Структура метрик
 type Stats struct {
 	Gauge   Gauge   `json:"gauge"`
 	Counter Counter `json:"counter"`
 }
 
+// Структура метрики типа gauge
 type Gauge struct {
 	Alloc         float64 `json:"alloc"`
 	BuckHashSys   float64 `json:"buckHashSys"`
@@ -41,12 +43,13 @@ type Gauge struct {
 	RandomValue   float64 `json:"randomValue"`
 }
 
+// Структура метрики типа counter
 type Counter struct {
 	PollCount int64 `json:"pollCount"`
 }
 
+// Метод для конвертации структуры метрики в мапу
 func (s *Stats) Map() (map[string]any, error) {
-
 	res, err := json.Marshal(s)
 	if err != nil {
 		return nil, fmt.Errorf("error marshalling %w", err)
