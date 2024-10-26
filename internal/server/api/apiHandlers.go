@@ -35,6 +35,9 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	var query = &updatePostRequest{}
 
 	//// Проверка хедера
+	//// Завернул в коммент, в первом инкременте указали,
+	//// что необходимо принимать такой контент
+	//// в 3м инкременте, если проверять, то не проходят автотесты
 	//if req.Header.Get("Content-Type") != "text/plain" {
 	//	w.WriteHeader(http.StatusBadRequest)
 	//	return
@@ -91,7 +94,7 @@ func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 
 	data, err := h.repo.Read(query.id)
 	if err != nil {
-		log.Println("get handler error:", err)
+		log.Println("get handler: read repo:", err)
 	}
 
 	if data == nil {
@@ -100,6 +103,9 @@ func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 	}
 
 	response, err := json.Marshal(data.Value)
+	if err != nil {
+		log.Println("get handler: marshal data:", err)
+	}
 
 	w.WriteHeader(http.StatusOK)
 	if _, err = w.Write(response); err != nil {
