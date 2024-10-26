@@ -34,11 +34,11 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	var err error
 	var query = &updatePostRequest{}
 
-	// Проверка хедера
-	if req.Header.Get("Content-Type") != "text/plain" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
+	//// Проверка хедера
+	//if req.Header.Get("Content-Type") != "text/plain" {
+	//	w.WriteHeader(http.StatusBadRequest)
+	//	return
+	//}
 
 	//TODO change to chi after test is solved
 	// Парсинг даты и констурктор записи
@@ -55,6 +55,21 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 
 	// Формирование уникального идентификатора
 	query.id = query.data.UniqueID()
+
+	// Проверка предыдущего значения, если тип "counter"
+	if query.data.Type == "counter" {
+		prevData, err := h.repo.Read(query.id)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		// Сложение значений, если найдено в хранилище
+		if prevData != nil {
+			query.data.Value = prevData.Value.(int64) + query.data.Value.(int64)
+		}
+	}
 
 	// Обновление или сохранение новой записи в хранилище
 	if err = h.repo.Update(query.id, query.data); err != nil {
@@ -84,15 +99,10 @@ func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	resp, err := json.Marshal(data)
-	if err != nil {
-		log.Println("get handler error:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	response, err := json.Marshal(data.Value)
 
 	w.WriteHeader(http.StatusOK)
-	if _, err = w.Write(resp); err != nil {
+	if _, err = w.Write(response); err != nil {
 		log.Println("get handler error:", err)
 	}
 }

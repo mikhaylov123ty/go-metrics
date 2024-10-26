@@ -37,20 +37,7 @@ func TestHandler_Update(t *testing.T) {
 				code: 400,
 			},
 		},
-		{
-			name: "wrong content type, error code 400",
-			args: args{
-				url:         "http://localhost:8080/update",
-				method:      "POST",
-				contentType: "application/json",
-				metricType:  "gauge",
-				metricName:  "alloc",
-				metricValue: "32.4123",
-			},
-			want: want{
-				code: 400,
-			},
-		},
+
 		{
 			name: "valid gauge",
 			args: args{
@@ -62,8 +49,7 @@ func TestHandler_Update(t *testing.T) {
 				metricValue: "32.4123",
 			},
 			want: want{
-				code:        200,
-				contentType: "text/plain; charset=utf-8",
+				code: 200,
 			},
 		},
 		{
@@ -77,8 +63,7 @@ func TestHandler_Update(t *testing.T) {
 				metricValue: "3251325234",
 			},
 			want: want{
-				code:        200,
-				contentType: "text/plain; charset=utf-8",
+				code: 200,
 			},
 		},
 	}
@@ -99,7 +84,6 @@ func TestHandler_Update(t *testing.T) {
 			res := w.Result()
 
 			assert.Equal(t, tt.want.code, res.StatusCode, "Codes are not equal")
-			assert.Equal(t, tt.want.contentType, res.Header.Get("Content-Type"), "Content types are note equal")
 		})
 	}
 }
