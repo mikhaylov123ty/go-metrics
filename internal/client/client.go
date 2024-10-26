@@ -3,10 +3,11 @@ package client
 import (
 	"log"
 	"math/rand/v2"
-	"net/http"
 	"runtime"
 	"strconv"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 )
 
 // Временное решение до реализации конфига
@@ -18,7 +19,7 @@ const (
 // Структура агента
 type Agent struct {
 	BaseURL string
-	Client  *http.Client
+	Client  *resty.Client
 	Stats   Stats
 }
 
@@ -26,7 +27,7 @@ type Agent struct {
 func NewAgent(baseURL string) *Agent {
 	return &Agent{
 		BaseURL: baseURL,
-		Client:  http.DefaultClient,
+		Client:  resty.New(),
 	}
 }
 
@@ -50,19 +51,20 @@ func (a *Agent) Run() {
 }
 
 // Метод отправки запроса "POST /update/{type}/{name}/{value}"
-func (a *Agent) postUpdate(metricType string, metricName string, metricValue string) *http.Response {
-	// Формирования запроса
-	request, err := http.NewRequest("POST", a.BaseURL+"update/"+metricType+"/"+metricName+"/"+metricValue, nil)
-	if err != nil {
-		log.Println("post update error:", err)
-	}
-	request.Header.Set("Content-Type", "text/plain")
 
-	// Выполнение запроса
-	resp, err := a.Client.Do(request)
+func (a *Agent) postUpdate(metricType string, metricName string, metricValue string) *resty.Response {
+	URL := a.BaseURL + "update/" + metricType + "/" + metricName + "/" + metricValue
+
+	// Формирования и выполнение запроса
+	resp, err := a.Client.R().
+		SetHeader("Content-Type", "text/plain").
+		Post(URL)
+
 	if err != nil {
 		log.Println("post update error:", err)
 	}
+
+	log.Println("Request Post Update", URL)
 
 	return resp
 }

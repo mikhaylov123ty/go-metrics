@@ -6,6 +6,8 @@ import (
 
 	"metrics/internal/server/api"
 	"metrics/internal/storage"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // Структура сервера
@@ -20,20 +22,25 @@ func New(storage *storage.Storage) *Server {
 
 // Метод запуска сервера
 func (s *Server) Start(port string) {
-	mux := http.NewServeMux()
+
+	router := chi.NewRouter()
 
 	// Назначение соответствий хендлеров
-	s.addHandlers(mux, api.NewHandler(*s.storage))
+	s.addHandlers(router, api.NewHandler(*s.storage))
 
 	// Старт сервера
 	log.Printf("Starting server on port %s", port)
-	if err := http.ListenAndServe(port, mux); err != nil {
+	if err := http.ListenAndServe(port, router); err != nil {
+
 		log.Fatal(err)
 	}
 }
 
 // Наполнение сервера методами хендлера
-func (s *Server) addHandlers(mux *http.ServeMux, handler *api.Handler) {
+
+func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
 	// /update/
-	mux.HandleFunc("POST /update/{type}/{name}/{value}", handler.Update)
+	router.Route("/update", func(r chi.Router) {
+		r.Post("/{type}/{name}/{value}", handler.Update)
+	})
 }

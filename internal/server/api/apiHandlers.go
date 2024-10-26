@@ -2,8 +2,12 @@ package api
 
 import (
 	"log"
-	"metrics/internal/storage"
 	"net/http"
+	"strings"
+
+	"metrics/internal/storage"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // Структура запроса
@@ -35,9 +39,9 @@ func (h Handler) Update(w http.ResponseWriter, req *http.Request) {
 
 	// Парсинг даты и констурктор записи
 	query.data, err = storage.NewData(
-		req.PathValue("type"),
-		req.PathValue("name"),
-		req.PathValue("value"),
+		strings.ToLower(chi.URLParam(req, "type")),
+		strings.ToLower(chi.URLParam(req, "name")),
+		chi.URLParam(req, "value"),
 	)
 	if err != nil {
 		log.Println("update handler error:", err)

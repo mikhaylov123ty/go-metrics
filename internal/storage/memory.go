@@ -1,5 +1,7 @@
 package storage
 
+import "log"
+
 // Структура хранилища
 type MemoryStorage struct {
 	metrics map[string]*Data
@@ -23,6 +25,8 @@ func (m *MemoryStorage) Read(id string) (*Data, error) {
 // Метод создания или обновления существующей записи из хранилища
 func (m *MemoryStorage) Update(id string, query *Data) error {
 	m.metrics[id] = query
+
+	log.Println("Update record", query)
 
 	return nil
 }

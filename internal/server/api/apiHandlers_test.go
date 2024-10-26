@@ -1,13 +1,24 @@
 package api
 
 import (
-	"github.com/stretchr/testify/assert"
-	"metrics/internal/storage"
+	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"metrics/internal/storage"
+
+	"github.com/go-resty/resty/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHandler_Update(t *testing.T) {
+	handler := &Handler{repo: storage.NewMemoryStorage()}
+	handlerFunc := http.HandlerFunc(handler.Update)
+
+	srv := httptest.NewServer(handlerFunc)
+	defer srv.Close()
+
 	type want struct {
 		code        int
 		contentType string
@@ -84,21 +95,21 @@ func TestHandler_Update(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := &Handler{repo: storage.NewMemoryStorage()}
-			request := httptest.NewRequest(tt.args.method, tt.args.url, nil)
-			request.Header.Add("Content-Type", tt.args.contentType)
-			request.SetPathValue("type", tt.args.metricType)
-			request.SetPathValue("name", tt.args.metricName)
-			request.SetPathValue("value", tt.args.metricValue)
 
-			w := httptest.NewRecorder()
+			request := resty.New().R().
+				SetHeader("Content-Type", "text/plain").
+				SetPathParams(map[string]string{
+					"type":  tt.args.metricType,
+					"name":  tt.args.metricName,
+					"value": tt.args.metricName,
+				})
 
-			handler.Update(w, request)
+			resp, err := request.Post(srv.URL)
 
-			res := w.Result()
+			require.NoError(t, err)
 
-			assert.Equal(t, tt.want.code, res.StatusCode, "Codes are not equal")
-			assert.Equal(t, tt.want.contentType, res.Header.Get("Content-Type"), "Content types are note equal")
+			assert.Equal(t, tt.want.code, resp.StatusCode(), "Codes are not equal")
+			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"), "Content types are note equal")
 		})
 	}
 }
