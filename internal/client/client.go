@@ -51,7 +51,6 @@ func (a *Agent) Run() {
 }
 
 // Метод отправки запроса "POST /update/{type}/{name}/{value}"
-
 func (a *Agent) postUpdate(metricType string, metricName string, metricValue string) *resty.Response {
 	URL := a.BaseURL + "update/" + metricType + "/" + metricName + "/" + metricValue
 
@@ -59,7 +58,6 @@ func (a *Agent) postUpdate(metricType string, metricName string, metricValue str
 	resp, err := a.Client.R().
 		SetHeader("Content-Type", "text/plain").
 		Post(URL)
-
 	if err != nil {
 		log.Println("post update error:", err)
 	}

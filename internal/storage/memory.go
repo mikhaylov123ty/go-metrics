@@ -12,13 +12,22 @@ func NewMemoryStorage() Storage {
 	return &MemoryStorage{metrics: make(map[string]*Data)}
 }
 
-// Метод получения записи из хранилища
+// Метод получения записи из хранилища по id
 func (m *MemoryStorage) Read(id string) (*Data, error) {
 	res, ok := m.metrics[id]
 	if !ok {
 		return nil, nil
 	}
 
+	return res, nil
+}
+
+// Метод получения записей из хранилища
+func (m *MemoryStorage) ReadAll() ([]*Data, error) {
+	res := make([]*Data, 0)
+	for _, data := range m.metrics {
+		res = append(res, data)
+	}
 	return res, nil
 }
 

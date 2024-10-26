@@ -1,19 +1,22 @@
 package api
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
 
 	"metrics/internal/storage"
-
-	"github.com/go-chi/chi/v5"
 )
 
 // Структура запроса
-type updateRequest struct {
+type updatePostRequest struct {
 	id   string
 	data *storage.Data
+}
+
+type getValueRequest struct {
+	id string
 }
 
 // Структура хендлера
@@ -27,9 +30,9 @@ func NewHandler(repo storage.Storage) *Handler {
 }
 
 // Метод ручки "POST /update/{type}/{name}/{value}"
-func (h Handler) Update(w http.ResponseWriter, req *http.Request) {
+func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	var err error
-	var query = &updateRequest{}
+	var query = &updatePostRequest{}
 
 	// Проверка хедера
 	if req.Header.Get("Content-Type") != "text/plain" {
@@ -37,11 +40,12 @@ func (h Handler) Update(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	//TODO change to chi after test is solved
 	// Парсинг даты и констурктор записи
 	query.data, err = storage.NewData(
-		strings.ToLower(chi.URLParam(req, "type")),
-		strings.ToLower(chi.URLParam(req, "name")),
-		chi.URLParam(req, "value"),
+		strings.ToLower(req.PathValue("type")),
+		strings.ToLower(req.PathValue("name")),
+		req.PathValue("value"),
 	)
 	if err != nil {
 		log.Println("update handler error:", err)
@@ -62,4 +66,57 @@ func (h Handler) Update(w http.ResponseWriter, req *http.Request) {
 	// Назначение хедера и статуса
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
+	var err error
+	var query = &getValueRequest{}
+
+	query.id = strings.ToLower(req.PathValue("type")) + "_" + strings.ToLower(req.PathValue("name"))
+
+	data, err := h.repo.Read(query.id)
+	if err != nil {
+		log.Println("get handler error:", err)
+	}
+
+	if data == nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	resp, err := json.Marshal(data)
+	if err != nil {
+		log.Println("get handler error:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if _, err = w.Write(resp); err != nil {
+		log.Println("get handler error:", err)
+	}
+}
+
+func (h *Handler) IndexGet(w http.ResponseWriter, req *http.Request) {
+	data, err := h.repo.ReadAll()
+	if err != nil {
+		log.Println("get handler error:", err)
+	}
+
+	if data == nil {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	resp, err := json.Marshal(data)
+	if err != nil {
+		log.Println("get handler error:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if _, err = w.Write(resp); err != nil {
+		log.Println("get handler error:", err)
+	}
 }

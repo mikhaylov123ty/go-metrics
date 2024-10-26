@@ -31,7 +31,6 @@ func (s *Server) Start(port string) {
 	// Старт сервера
 	log.Printf("Starting server on port %s", port)
 	if err := http.ListenAndServe(port, router); err != nil {
-
 		log.Fatal(err)
 	}
 }
@@ -41,6 +40,14 @@ func (s *Server) Start(port string) {
 func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
 	// /update/
 	router.Route("/update", func(r chi.Router) {
-		r.Post("/{type}/{name}/{value}", handler.Update)
+		r.Post("/{type}/{name}/{value}", handler.UpdatePost)
 	})
+
+	// /value/
+	router.Route("/value", func(r chi.Router) {
+		r.Get("/{type}/{name}", handler.ValueGet)
+	})
+
+	// index
+	router.Get("/", handler.IndexGet)
 }
