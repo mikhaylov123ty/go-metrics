@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	"metrics/internal/server/api/requestTemplates"
 	"metrics/internal/storage"
 )
 
@@ -23,7 +22,7 @@ func NewHandler(repo storage.Storage) *Handler {
 // Метод ручки "POST /update/{type}/{name}/{value}"
 func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	var err error
-	var query = &requestTemplates.UpdatePost{}
+	var query = &updatePost{}
 
 	//// Проверка хедера
 	//// Завернул в коммент, в первом инкременте указали,
@@ -36,7 +35,7 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 
 	//TODO change to chi after test is solved
 	// Парсинг даты и констурктор записи
-	query.Data, err = storage.NewData(
+	query.data, err = storage.NewData(
 		strings.ToLower(req.PathValue("type")),
 		strings.ToLower(req.PathValue("name")),
 		req.PathValue("value"),
@@ -48,11 +47,11 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Формирование уникального идентификатора
-	query.Id = query.Data.UniqueID()
+	query.id = query.data.UniqueID()
 
 	// Проверка предыдущего значения, если тип "counter"
-	if query.Data.Type == "counter" {
-		prevData, err := h.repo.Read(query.Id)
+	if query.data.Type == "counter" {
+		prevData, err := h.repo.Read(query.id)
 		if err != nil {
 			log.Println(err)
 			w.WriteHeader(http.StatusBadRequest)
@@ -61,12 +60,12 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 
 		// Сложение значений, если найдено в хранилище
 		if prevData != nil {
-			query.Data.Value = prevData.Value.(int64) + query.Data.Value.(int64)
+			query.data.Value = prevData.Value.(int64) + query.data.Value.(int64)
 		}
 	}
 
 	// Обновление или сохранение новой записи в хранилище
-	if err = h.repo.Update(query.Id, query.Data); err != nil {
+	if err = h.repo.Update(query.id, query.data); err != nil {
 		log.Println("update handler error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -80,13 +79,13 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 // Метод ручки "GET /value/{type}/{name}"
 func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 	var err error
-	var query = &requestTemplates.GetValue{}
+	var query = &valueGet{}
 
 	// Формирование ключа записи
-	query.Id = strings.ToLower(req.PathValue("type")) + "_" + strings.ToLower(req.PathValue("name"))
+	query.id = strings.ToLower(req.PathValue("type")) + "_" + strings.ToLower(req.PathValue("name"))
 
 	// Получение данных записи
-	data, err := h.repo.Read(query.Id)
+	data, err := h.repo.Read(query.id)
 	if err != nil {
 		log.Println("get handler: read repo:", err)
 	}
