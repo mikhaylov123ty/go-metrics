@@ -22,7 +22,7 @@ func New(storage *storage.Storage) *Server {
 
 // Метод запуска сервера
 func (s *Server) Start(address string) {
-
+	// Создание роутера
 	router := chi.NewRouter()
 
 	// Назначение соответствий хендлеров
@@ -36,14 +36,13 @@ func (s *Server) Start(address string) {
 }
 
 // Наполнение сервера методами хендлера
-
 func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
-	// /update/
+	// /update
 	router.Route("/update", func(r chi.Router) {
 		r.Post("/{type}/{name}/{value}", handler.UpdatePost)
 	})
 
-	// /value/
+	// /value
 	router.Route("/value", func(r chi.Router) {
 		r.Get("/{type}/{name}", handler.ValueGet)
 	})

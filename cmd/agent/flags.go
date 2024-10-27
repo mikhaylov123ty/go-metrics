@@ -3,52 +3,85 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 )
 
-// Структура флагов агента
-type agentFlags struct {
+// Структура конфигурации агента
+type agentConfig struct {
 	host           string
 	port           string
 	reportInterval int
 	pollInterval   int
 }
 
-// Конструктор структуры флагов агента
-func buildFlags() *agentFlags {
-	flags := &agentFlags{}
+// Конструктор конфигурации агента
+func newConfig() (*agentConfig, error) {
+	var err error
+	config := &agentConfig{}
 
-	flags.parseFlags()
+	// Парсинг флагов
+	config.parseFlags()
 
-	return flags
+	// Парсинг переменных окружения
+	if err = config.parseEnv(); err != nil {
+		return nil, fmt.Errorf("error parsing environment variables: %w", err)
+	}
+
+	return config, nil
 }
 
 // Конструктор инструкций флагов агента
-func (af *agentFlags) parseFlags() {
-	flag.StringVar(&af.host, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
-	flag.StringVar(&af.port, "port", "8080", "Port on which to listen. Example: \"8081\"")
-	flag.IntVar(&af.reportInterval, "r", 10, "Metrics send interval")
-	flag.IntVar(&af.pollInterval, "p", 2, "Metrics update interval")
+func (a *agentConfig) parseFlags() {
+	flag.StringVar(&a.host, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
+	flag.StringVar(&a.port, "port", "8080", "Port on which to listen. Example: \"8081\"")
+	flag.IntVar(&a.reportInterval, "r", 10, "Metrics send interval")
+	flag.IntVar(&a.pollInterval, "p", 2, "Metrics update interval")
 
-	_ = flag.Value(af)
-	flag.Var(af, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
+	_ = flag.Value(a)
+	flag.Var(a, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
 
 	flag.Parse()
 }
 
-// Реализация интерфейса flag.Value
-func (af *agentFlags) String() string {
-	return af.host + ":" + af.port
+// Конструктор инструкций переменных окружений агента
+func (a *agentConfig) parseEnv() error {
+	var err error
+	if address := os.Getenv("ADDRESS"); address != "" {
+		if err = a.Set(address); err != nil {
+			return fmt.Errorf("error setting ADDRESS: %w", err)
+		}
+	}
+
+	if reportInterval := os.Getenv("REPORT_INTERVAL"); reportInterval != "" {
+		if a.reportInterval, err = strconv.Atoi(reportInterval); err != nil {
+			return fmt.Errorf("error parsing REPORT_INTERVAL: %w", err)
+		}
+	}
+
+	if pollInterval := os.Getenv("POLL_INTERVAL"); pollInterval != "" {
+		if a.pollInterval, err = strconv.Atoi(pollInterval); err != nil {
+			return fmt.Errorf("error parsing POLL_INTERVAL: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // Реализация интерфейса flag.Value
-func (af *agentFlags) Set(value string) error {
+func (a *agentConfig) String() string {
+	return a.host + ":" + a.port
+}
+
+// Реализация интерфейса flag.Value
+func (a *agentConfig) Set(value string) error {
 	values := strings.Split(value, ":")
 	if len(values) != 2 {
 		return fmt.Errorf("invalid value %q, expected <host:port>:<host:port>", value)
 	}
 
-	af.host = values[0]
-	af.port = values[1]
+	a.host = values[0]
+	a.port = values[1]
 	return nil
 }
