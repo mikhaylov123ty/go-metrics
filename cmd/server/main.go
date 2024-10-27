@@ -12,6 +12,9 @@ func main() {
 	// Инициализация инстанса сервера
 	serverInstance := server.New(&storageInstance)
 
+	// Инициализация флагов сервера
+	flags := buildFlags()
+
 	// Запуск сервера
-	serverInstance.Start(":8080")
+	serverInstance.Start(flags.String())
 }

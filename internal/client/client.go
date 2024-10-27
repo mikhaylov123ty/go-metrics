@@ -10,24 +10,22 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
-// Временное решение до реализации конфига
-const (
-	pollInterval   = 2 * time.Second
-	reportInterval = 10 * time.Second
-)
-
 // Структура агента
 type Agent struct {
-	BaseURL string
-	Client  *resty.Client
-	Stats   Stats
+	baseURL        string
+	client         *resty.Client
+	pollInterval   int
+	reportInterval int
+	Stats          Stats
 }
 
 // Конструктор агента
-func NewAgent(baseURL string) *Agent {
+func NewAgent(baseURL string, pollInterval int, reportInterval int) *Agent {
 	return &Agent{
-		BaseURL: baseURL,
-		Client:  resty.New(),
+		baseURL:        "http://" + baseURL + "/",
+		client:         resty.New(),
+		pollInterval:   pollInterval,
+		reportInterval: reportInterval,
 	}
 }
 
@@ -38,7 +36,7 @@ func (a *Agent) Run() {
 		for {
 			a.collectMetrics()
 
-			time.Sleep(pollInterval)
+			time.Sleep(time.Duration(a.pollInterval) * time.Second)
 		}
 	}()
 
@@ -46,16 +44,16 @@ func (a *Agent) Run() {
 	for {
 		a.sendMetrics()
 
-		time.Sleep(reportInterval)
+		time.Sleep(time.Duration(a.reportInterval) * time.Second)
 	}
 }
 
 // Метод отправки запроса "POST /update/{type}/{name}/{value}"
 func (a *Agent) postUpdate(metricType string, metricName string, metricValue string) *resty.Response {
-	URL := a.BaseURL + "update/" + metricType + "/" + metricName + "/" + metricValue
+	URL := a.baseURL + "update/" + metricType + "/" + metricName + "/" + metricValue
 
 	// Формирования и выполнение запроса
-	resp, err := a.Client.R().
+	resp, err := a.client.R().
 		SetHeader("Content-Type", "text/plain").
 		Post(URL)
 	if err != nil {

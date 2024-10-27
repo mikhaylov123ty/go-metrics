@@ -21,7 +21,7 @@ func New(storage *storage.Storage) *Server {
 }
 
 // Метод запуска сервера
-func (s *Server) Start(port string) {
+func (s *Server) Start(address string) {
 
 	router := chi.NewRouter()
 
@@ -29,8 +29,8 @@ func (s *Server) Start(port string) {
 	s.addHandlers(router, api.NewHandler(*s.storage))
 
 	// Старт сервера
-	log.Printf("Starting server on port %s", port)
-	if err := http.ListenAndServe(port, router); err != nil {
+	log.Printf("Starting server on port %s", address)
+	if err := http.ListenAndServe(address, router); err != nil {
 		log.Fatal(err)
 	}
 }

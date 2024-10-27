@@ -6,8 +6,11 @@ import (
 
 func main() {
 
+	// Инициализация флагов агента
+	flags := buildFlags()
+
 	// Инициализация инстанса агента
-	agentInstance := client.NewAgent("http://localhost:8080/")
+	agentInstance := client.NewAgent(flags.String(), flags.pollInterval, flags.reportInterval)
 
 	// Запуск агента
 	agentInstance.Run()
