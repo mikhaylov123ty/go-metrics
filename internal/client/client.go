@@ -22,7 +22,7 @@ type Agent struct {
 // Конструктор агента
 func NewAgent(baseURL string, pollInterval int, reportInterval int) *Agent {
 	return &Agent{
-		baseURL:        "http://" + baseURL + "/",
+		baseURL:        "http://" + baseURL,
 		client:         resty.New(),
 		pollInterval:   pollInterval,
 		reportInterval: reportInterval,
@@ -50,7 +50,7 @@ func (a *Agent) Run() {
 
 // Метод отправки запроса "POST /update/{type}/{name}/{value}"
 func (a *Agent) postUpdate(metricType string, metricName string, metricValue string) *resty.Response {
-	URL := a.baseURL + "update/" + metricType + "/" + metricName + "/" + metricValue
+	URL := a.baseURL + "/update/" + metricType + "/" + metricName + "/" + metricValue
 
 	// Формирования и выполнение запроса
 	resp, err := a.client.R().

@@ -43,6 +43,7 @@ func (sf *serverFlags) Set(value string) error {
 	if len(values) != 2 {
 		return fmt.Errorf("invalid value %q, expected <host:port>:<host:port>", value)
 	}
+
 	sf.host = values[0]
 	sf.port = values[1]
 	return nil
