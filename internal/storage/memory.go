@@ -1,9 +1,13 @@
 package storage
 
-import "log"
+import (
+	"log"
+	"sync"
+)
 
 // Структура хранилища
 type MemoryStorage struct {
+	mu      sync.RWMutex
 	metrics map[string]*Data
 }
 
@@ -33,6 +37,9 @@ func (m *MemoryStorage) ReadAll() ([]*Data, error) {
 
 // Метод создания или обновления существующей записи из хранилища
 func (m *MemoryStorage) Update(id string, query *Data) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.metrics[id] = query
 
 	log.Println("Update record", query)
@@ -42,6 +49,9 @@ func (m *MemoryStorage) Update(id string, query *Data) error {
 
 // Метод удаления записи из хранилища
 func (m *MemoryStorage) Delete(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	delete(m.metrics, id)
 	return nil
 }
