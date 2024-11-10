@@ -31,8 +31,6 @@ func NewData(metricType string, name string, value string) (*Data, error) {
 		Name: name,
 	}
 
-	fmt.Println("NEW DATA", "type", metricType, "name", name, "value", value)
-
 	// В зависимости от типа конвертируем значение в требуемый формат
 	switch metricType {
 	case gauge:
