@@ -42,11 +42,13 @@ func (s *Server) Start(address string) {
 func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
 	// /update
 	router.Route("/update", func(r chi.Router) {
+		r.Post("/", s.WithLogger(handler.UpdatePostJSON))
 		r.Post("/{type}/{name}/{value}", s.WithLogger(handler.UpdatePost))
 	})
 
 	// /value
 	router.Route("/value", func(r chi.Router) {
+		r.Post("/", s.WithLogger(handler.ValueGetJSON))
 		r.Get("/{type}/{name}", s.WithLogger(handler.ValueGet))
 	})
 

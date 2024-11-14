@@ -16,8 +16,8 @@ type ResponseData struct {
 
 // Обертка метода WriteHeader для дублирования данных в структуру ответа
 func (w *LoggingResponseWriter) WriteHeader(statusCode int) {
-	w.ResponseWriter.WriteHeader(statusCode)
 	w.ResponseData.Status = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
 }
 
 // Обертка метода Write для дублирования данных в структуру ответа
