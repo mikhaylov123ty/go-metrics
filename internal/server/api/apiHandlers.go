@@ -98,7 +98,6 @@ func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Назначение хедера и статуса
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -166,7 +165,6 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Назначение хедера и статуса
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -304,7 +302,7 @@ func (h *Handler) IndexGet(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Передача данных в ответ
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "text/html")
 	if _, err = w.Write(resp); err != nil {
 		log.Println("get handler error:", err)
 	}

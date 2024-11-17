@@ -55,6 +55,7 @@ func (a *Agent) postUpdate(metric []byte) *resty.Response {
 	// Формирования и выполнение запроса
 	resp, err := a.client.R().
 		SetHeader("Content-Type", "application/json").
+		SetHeader("Accept-Encoding", "gzip").
 		SetBody(metric).
 		Post(URL)
 	if err != nil {
