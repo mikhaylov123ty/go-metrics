@@ -15,7 +15,7 @@ type Agent struct {
 	pollInterval   int
 	reportInterval int
 	metrics        []*Metrics
-	statsBuf       func() *Stats
+	statsBuf       statsBuf
 }
 
 // Конструктор агента

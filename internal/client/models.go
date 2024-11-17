@@ -5,8 +5,13 @@ import (
 	"runtime"
 )
 
-type Stats map[string]interface{}
+// Алиасы для типов
+type (
+	Stats    map[string]interface{}
+	statsBuf func() *Stats
+)
 
+// Структура метрик
 type Metrics struct {
 	ID    string   `json:"id"`              // имя метрики
 	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter
@@ -14,8 +19,8 @@ type Metrics struct {
 	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
 }
 
-// Метод сбора метрик
-func collectMetrics(statsBuf *Stats) func() *Stats {
+// Метод сбора метрик с счетчиком
+func collectMetrics(statsBuf *Stats) statsBuf {
 	counter := 1
 	return func() *Stats {
 		// Чтение метрик
@@ -56,14 +61,13 @@ func collectMetrics(statsBuf *Stats) func() *Stats {
 
 		// Увеличение счетчика
 		(*statsBuf)["PollCount"] = int64(counter)
-
 		counter++
 
 		return statsBuf
 	}
-
 }
 
+// Метод конструктора метрик в структры
 func (s *Stats) buildMetrics() []*Metrics {
 	res := []*Metrics{}
 	for k, v := range *s {
