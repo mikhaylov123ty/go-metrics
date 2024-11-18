@@ -2,9 +2,9 @@ package storage
 
 // Структура данных хранилища
 type Data struct {
-	Type  string
-	Name  string
-	Value any
+	Type  string `json:"type"`
+	Name  string `json:"name"`
+	Value any    `json:"value"`
 }
 
 // Временный метод генерации id записи метрики

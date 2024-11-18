@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-
 	"metrics/internal/server"
 	"metrics/internal/storage"
 	"metrics/pkg/logger"
@@ -24,7 +23,7 @@ func main() {
 	}
 
 	// Инициализация инстанса сервера
-	serverInstance := server.New(&storageInstance, loggerInstance)
+	serverInstance := server.New(storageInstance, loggerInstance, config.storeInterval, config.fileStoragePath, config.restore)
 
 	// Запуск сервера
 	serverInstance.Start(config.String())

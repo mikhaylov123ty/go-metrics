@@ -52,6 +52,16 @@ func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	if metrics.Value == nil && metrics.MType == "gauge" {
+		log.Println("wrong gauge metrics data")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if metrics.Delta == nil && metrics.MType == "counter" {
+		log.Println("wrong gauge metrics data")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
 	// Конструктор даты хранилища
 	storageData := &storage.Data{
@@ -222,9 +232,11 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 
 	// Форматирование значение в зависимости от типа
 	if metrics.MType == "counter" {
-		metrics.Delta = data.Value.(*int64)
+		delta := data.Value.(*int64)
+		metrics.Delta = delta
 	} else {
-		metrics.Value = data.Value.(*float64)
+		value := data.Value.(*float64)
+		metrics.Value = value
 	}
 
 	// Сериализация данных
