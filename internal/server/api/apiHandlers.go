@@ -23,7 +23,6 @@ func NewHandler(repo storage.Storage) *Handler {
 // Метод ручки "POST /update с телом JSON"
 func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	var err error
-
 	// Проверка хедера
 	if req.Header.Get("Content-Type") != "application/json" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -86,8 +85,8 @@ func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 
 		// Сложение значений, если найдено в хранилище
 		if prevData != nil {
-			value := *storageData.Value.(*int64) + *prevData.Value.(*int64)
-			storageData.Value = &value
+			sumValue := *storageData.Value.(*int64) + *prevData.Value.(*int64)
+			storageData.Value = &sumValue
 		}
 
 	case "gauge":
@@ -128,11 +127,13 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	switch storageData.Type {
 	case "counter":
 		// Форматирование и присвоение значения counter
-		if storageData.Value, err = strconv.ParseInt(req.PathValue("value"), 10, 64); err != nil {
+		value, err := strconv.ParseInt(req.PathValue("value"), 10, 64)
+		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			log.Println("invalid new data:", err)
 			return
 		}
+		storageData.Value = &value
 
 		// Поиск предыдущего значения counter
 		prevData, err := h.repo.Read(dataID)
@@ -144,16 +145,19 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 
 		// Сложение значений, если найдено в хранилище
 		if prevData != nil {
-			storageData.Value = prevData.Value.(int64) + storageData.Value.(int64)
+			sumValue := *storageData.Value.(*int64) + *prevData.Value.(*int64)
+			storageData.Value = &sumValue
 		}
 
 	case "gauge":
 		// Форматирование и присвоение значения gauge
-		if storageData.Value, err = strconv.ParseFloat(req.PathValue("value"), 64); err != nil {
-			log.Println("invalid gauge data:", err)
+		value, err := strconv.ParseFloat(req.PathValue("value"), 64)
+		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
+			log.Println("invalid new data:", err)
 			return
 		}
+		storageData.Value = &value
 
 	default:
 		log.Println("invalid data type:", storageData.Type)

@@ -92,6 +92,7 @@ func (s *Server) withLogger(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
+		// Создание обертки для ResponseWriter
 		lw := &api.LoggingResponseWriter{
 			ResponseWriter: w,
 			ResponseData: &api.ResponseData{
@@ -100,6 +101,7 @@ func (s *Server) withLogger(next http.HandlerFunc) http.HandlerFunc {
 			},
 		}
 
+		// Переход к следующему хендлеру
 		next(lw, r)
 
 		s.logger.Infof("Incoming HTTP Request: URI: %s, Method: %v, Headers: %v, Time Duration: %v", r.RequestURI, r.Method, r.Header, time.Since(start))
@@ -116,6 +118,7 @@ func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		// Проверка хедеров
 		headers := strings.Split(r.Header.Get("Accept-Encoding"), ",")
 		if !api.ArrayContains(headers, "gzip") {
 			next(w, r)
@@ -127,22 +130,25 @@ func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 		if err != nil {
 			s.logger.Error("gZip encode error:", err)
 		}
-
 		defer gz.Close()
 
-		s.logger.Infof("compressing request with gzip")
+		s.logger.Debugln("compressing request with gzip")
 
 		w.Header().Set("Content-Encoding", "gzip")
+
 		next(api.GzipWriter{ResponseWriter: w, Writer: gz}, r)
 	}
 }
 
+// Метод записи метрик в файл
 func (s *Server) storeMetrics() error {
+	// Чтение всех метрик из хранилища
 	metrics, err := s.storage.ReadAll()
 	if err != nil {
 		return fmt.Errorf("read metrics: %w", err)
 	}
 
+	// Проверка наличия метрик
 	if len(metrics) == 0 {
 		s.logger.Infof("no metrics found")
 		return nil
@@ -161,7 +167,8 @@ func (s *Server) storeMetrics() error {
 			i++
 		}
 	}
-	s.logger.Infof("data: %s:endData", string(data))
+
+	s.logger.Debugf("data:%s:endData", string(data))
 
 	storageFile, err := os.Create(s.fileStoragePath)
 	if err != nil {
@@ -174,36 +181,46 @@ func (s *Server) storeMetrics() error {
 	return nil
 }
 
-// TODO make custom marshaller
+// Метод восстановления данных метрик из файла
 func (s *Server) initMetricsFromFile() error {
-	data, err := os.ReadFile(s.fileStoragePath)
+	fileData, err := os.ReadFile(s.fileStoragePath)
 	if err != nil {
 		s.logger.Infof("no metrics file found, skipping restore")
 		return nil
 	}
-	fmt.Println("DATA", string(data), "END DATA")
-	arrData := strings.Split(string(data), "\n")
-	fmt.Println("ARRDATA", arrData)
-	for _, v := range arrData {
-		storageData := &storage.Data{}
-		if err = json.Unmarshal([]byte(v), storageData); err != nil {
+
+	// Проверка, если файл пустой
+	if len(fileData) < 1 {
+		s.logger.Infof("no metrics found in file, skipping restore")
+		return nil
+	}
+
+	// Разбивка по линиям файла
+	lines := strings.Split(string(fileData), "\n")
+	for _, line := range lines {
+		//Десериализация в буфер
+		bufData := map[string]any{}
+		if err = json.Unmarshal([]byte(line), &bufData); err != nil {
 			return fmt.Errorf("unmarshal metrics: %w", err)
 		}
+
+		// Конструктор хранилища даты
+		storageData := &storage.Data{}
+		storageData.Type = bufData["type"].(string)
+		storageData.Name = bufData["name"].(string)
 		dataID := storageData.UniqueID()
 
-		newStorageData := &storage.Data{}
-		newStorageData.Type = storageData.Type
-		newStorageData.Name = storageData.Name
-
+		// Форматирование типа значения
 		if storageData.Type == "counter" {
-			value := int64(storageData.Value.(float64))
-			newStorageData.Value = &value
-
+			value := int64(bufData["value"].(float64))
+			storageData.Value = &value
 		} else {
-			value := storageData.Value.(float64)
-			newStorageData.Value = &value
+			value := bufData["value"].(float64)
+			storageData.Value = &value
 		}
-		if err = s.storage.Update(dataID, newStorageData); err != nil {
+
+		// Забись в хранилище
+		if err = s.storage.Update(dataID, storageData); err != nil {
 			return fmt.Errorf("update metrics: %w", err)
 		}
 	}

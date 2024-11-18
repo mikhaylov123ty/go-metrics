@@ -42,6 +42,7 @@ func (w GzipWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
+// Метод проверки строки в массиве строк
 func ArrayContains(arr []string, str string) bool {
 	for _, a := range arr {
 		if a == str {
