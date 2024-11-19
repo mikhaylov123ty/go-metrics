@@ -1,65 +1,86 @@
 package client
 
 import (
-	"encoding/json"
-	"fmt"
+	"math/rand/v2"
+	"runtime"
+)
+
+// Алиасы для типов
+type (
+	Stats    map[string]interface{}
+	statsBuf func() *Stats
 )
 
 // Структура метрик
-type Stats struct {
-	Gauge   Gauge   `json:"gauge"`
-	Counter Counter `json:"counter"`
+type Metrics struct {
+	ID    string   `json:"id"`              // имя метрики
+	MType string   `json:"type"`            // параметр, принимающий значение gauge или counter
+	Delta *int64   `json:"delta,omitempty"` // значение метрики в случае передачи counter
+	Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
 }
 
-// Структура метрики типа gauge
-type Gauge struct {
-	Alloc         float64 `json:"alloc"`
-	BuckHashSys   float64 `json:"buckHashSys"`
-	Frees         float64 `json:"frees"`
-	GCCPUFraction float64 `json:"gcCpuFraction"`
-	GCSys         float64 `json:"gcSys"`
-	HeapAlloc     float64 `json:"heapAlloc"`
-	HeapIdle      float64 `json:"heapIdle"`
-	HeapInuse     float64 `json:"heapInuse"`
-	HeapObjects   float64 `json:"heapObjects"`
-	HeapReleased  float64 `json:"heapReleased"`
-	HeapSys       float64 `json:"heapSys"`
-	LastGC        float64 `json:"lastGC"`
-	Lookups       float64 `json:"lookups"`
-	MCacheInuse   float64 `json:"mCacheInuse"`
-	MCacheSys     float64 `json:"mCacheSys"`
-	MSpanInuse    float64 `json:"mSpanInuse"`
-	MSpanSys      float64 `json:"mSpanSys"`
-	Mallocs       float64 `json:"mallocs"`
-	NextGC        float64 `json:"nextGC"`
-	NumForcedGC   float64 `json:"numForcedGC"`
-	NumGC         float64 `json:"numGC"`
-	OtherSys      float64 `json:"otherSys"`
-	PauseTotalNs  float64 `json:"pauseTotalNs"`
-	StackInuse    float64 `json:"stackInuse"`
-	StackSys      float64 `json:"stackSys"`
-	Sys           float64 `json:"sys"`
-	TotalAlloc    float64 `json:"totalAlloc"`
-	RandomValue   float64 `json:"randomValue"`
-}
+// Метод сбора метрик с счетчиком
+func collectMetrics(statsBuf *Stats) statsBuf {
+	counter := 1
+	return func() *Stats {
+		// Чтение метрик
+		rt := &runtime.MemStats{}
+		runtime.ReadMemStats(rt)
 
-// Структура метрики типа counter
-type Counter struct {
-	PollCount int64 `json:"pollCount"`
-}
+		// Присвоение полей для каждой метрики
+		(*statsBuf)["Alloc"] = float64(rt.Alloc)
+		(*statsBuf)["BuckHashSys"] = float64(rt.BuckHashSys)
+		(*statsBuf)["Frees"] = float64(rt.Frees)
+		(*statsBuf)["GCCPUFraction"] = float64(rt.GCCPUFraction)
+		(*statsBuf)["GCSys"] = float64(rt.GCSys)
+		(*statsBuf)["HeapAlloc"] = float64(rt.HeapAlloc)
+		(*statsBuf)["HeapIdle"] = float64(rt.HeapIdle)
+		(*statsBuf)["HeapInuse"] = float64(rt.HeapInuse)
+		(*statsBuf)["HeapObjects"] = float64(rt.HeapObjects)
+		(*statsBuf)["HeapReleased"] = float64(rt.HeapReleased)
+		(*statsBuf)["HeapSys"] = float64(rt.HeapSys)
+		(*statsBuf)["LastGC"] = float64(rt.LastGC)
+		(*statsBuf)["Lookups"] = float64(rt.Lookups)
+		(*statsBuf)["MCacheInuse"] = float64(rt.MCacheInuse)
+		(*statsBuf)["MCacheSys"] = float64(rt.MCacheSys)
+		(*statsBuf)["MSpanInuse"] = float64(rt.MSpanInuse)
+		(*statsBuf)["MSpanSys"] = float64(rt.MSpanSys)
+		(*statsBuf)["Mallocs"] = float64(rt.Mallocs)
+		(*statsBuf)["NextGC"] = float64(rt.NextGC)
+		(*statsBuf)["NumForcedGC"] = float64(rt.NumForcedGC)
+		(*statsBuf)["NumGC"] = float64(rt.NumGC)
+		(*statsBuf)["OtherSys"] = float64(rt.OtherSys)
+		(*statsBuf)["PauseTotalNs"] = float64(rt.PauseTotalNs)
+		(*statsBuf)["StackInuse"] = float64(rt.StackInuse)
+		(*statsBuf)["StackSys"] = float64(rt.StackSys)
+		(*statsBuf)["Sys"] = float64(rt.Sys)
+		(*statsBuf)["TotalAlloc"] = float64(rt.TotalAlloc)
 
-// Метод для конвертации структуры метрики в мапу
-func (s *Stats) Map() (map[string]any, error) {
-	res, err := json.Marshal(s)
-	if err != nil {
-		return nil, fmt.Errorf("error marshalling %w", err)
+		// Генерация произвольного значения
+		(*statsBuf)["RandomValue"] = rand.Float64()
+
+		// Увеличение счетчика
+		(*statsBuf)["PollCount"] = int64(counter)
+		counter++
+
+		return statsBuf
 	}
+}
 
-	postData := make(map[string]interface{})
-
-	if err = json.Unmarshal(res, &postData); err != nil {
-		return nil, fmt.Errorf("error unmarshalling %w", err)
+// Метод конструктора метрик в структры
+func (s *Stats) buildMetrics() []*Metrics {
+	res := []*Metrics{}
+	for k, v := range *s {
+		metric := Metrics{ID: k}
+		switch t := v.(type) {
+		case float64:
+			metric.MType = "gauge"
+			metric.Value = &t
+		case int64:
+			metric.MType = "counter"
+			metric.Delta = &t
+		}
+		res = append(res, &metric)
 	}
-
-	return postData, nil
+	return res
 }

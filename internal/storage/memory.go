@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"log"
 	"sync"
 )
 
@@ -41,8 +40,6 @@ func (m *MemoryStorage) Update(id string, query *Data) error {
 	defer m.mu.Unlock()
 
 	m.metrics[id] = query
-
-	log.Println("Update record", query)
 
 	return nil
 }

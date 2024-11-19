@@ -1,10 +1,9 @@
 package client
 
 import (
+	"fmt"
 	"log"
-	"math/rand/v2"
-	"runtime"
-	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -16,7 +15,8 @@ type Agent struct {
 	client         *resty.Client
 	pollInterval   int
 	reportInterval int
-	Stats          Stats
+	metrics        []*Metrics
+	statsBuf       statsBuf
 }
 
 // Конструктор агента
@@ -26,6 +26,7 @@ func NewAgent(baseURL string, pollInterval int, reportInterval int) *Agent {
 		client:         resty.New(),
 		pollInterval:   pollInterval,
 		reportInterval: reportInterval,
+		statsBuf:       collectMetrics(&Stats{}),
 	}
 }
 
@@ -34,7 +35,7 @@ func (a *Agent) Run() {
 	// Запуск горутины по сбору метрик с интервалом pollInterval
 	go func() {
 		for {
-			a.collectMetrics()
+			a.metrics = a.statsBuf().buildMetrics()
 
 			time.Sleep(time.Duration(a.pollInterval) * time.Second)
 		}
@@ -48,76 +49,39 @@ func (a *Agent) Run() {
 	}
 }
 
-// Метод отправки запроса "POST /update/{type}/{name}/{value}"
-func (a *Agent) postUpdate(metricType string, metricName string, metricValue string) *resty.Response {
-	URL := a.baseURL + "/update/" + metricType + "/" + metricName + "/" + metricValue
+// Метод отправки запроса "POST /update"
+func (a *Agent) postUpdate(metric *Metrics) (*resty.Response, error) {
+	URL := a.baseURL + "/update"
 
 	// Формирования и выполнение запроса
 	resp, err := a.client.R().
-		SetHeader("Content-Type", "text/plain").
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Accept-Encoding", "gzip").
+		SetBody(metric).
 		Post(URL)
 	if err != nil {
-		log.Println("post update error:", err)
+		return nil, fmt.Errorf("post update error: %w", err)
 	}
 
-	log.Println("Request Post Update", URL)
-
-	return resp
-}
-
-// Метод сбора метрик
-func (a *Agent) collectMetrics() {
-	// Чтение метрик
-	rt := &runtime.MemStats{}
-	runtime.ReadMemStats(rt)
-
-	// Присвоение полей для каждой метрики
-	a.Stats.Gauge.Alloc = float64(rt.Alloc)
-	a.Stats.Gauge.BuckHashSys = float64(rt.BuckHashSys)
-	a.Stats.Gauge.Frees = float64(rt.Frees)
-	a.Stats.Gauge.GCCPUFraction = float64(rt.GCCPUFraction)
-	a.Stats.Gauge.GCSys = float64(rt.GCSys)
-	a.Stats.Gauge.HeapAlloc = float64(rt.HeapAlloc)
-	a.Stats.Gauge.HeapIdle = float64(rt.HeapIdle)
-	a.Stats.Gauge.HeapInuse = float64(rt.HeapInuse)
-	a.Stats.Gauge.HeapObjects = float64(rt.HeapObjects)
-	a.Stats.Gauge.HeapReleased = float64(rt.HeapReleased)
-	a.Stats.Gauge.HeapSys = float64(rt.HeapSys)
-	a.Stats.Gauge.LastGC = float64(rt.LastGC)
-	a.Stats.Gauge.Lookups = float64(rt.Lookups)
-	a.Stats.Gauge.MCacheInuse = float64(rt.MCacheInuse)
-	a.Stats.Gauge.MCacheSys = float64(rt.MCacheSys)
-	a.Stats.Gauge.MSpanInuse = float64(rt.MSpanInuse)
-	a.Stats.Gauge.MSpanSys = float64(rt.MSpanSys)
-	a.Stats.Gauge.Mallocs = float64(rt.Mallocs)
-	a.Stats.Gauge.NextGC = float64(rt.NextGC)
-	a.Stats.Gauge.NumForcedGC = float64(rt.NumForcedGC)
-	a.Stats.Gauge.NumGC = float64(rt.NumGC)
-	a.Stats.Gauge.OtherSys = float64(rt.OtherSys)
-	a.Stats.Gauge.PauseTotalNs = float64(rt.PauseTotalNs)
-	a.Stats.Gauge.StackInuse = float64(rt.StackInuse)
-	a.Stats.Gauge.StackSys = float64(rt.StackSys)
-	a.Stats.Gauge.Sys = float64(rt.Sys)
-	a.Stats.Gauge.TotalAlloc = float64(rt.TotalAlloc)
-
-	// Генерация произвольного значения
-	a.Stats.Gauge.RandomValue = rand.Float64()
-
-	// Увеличение счетчика
-	a.Stats.Counter.PollCount++
+	return resp, nil
 }
 
 // Метод отправки метрик
 func (a *Agent) sendMetrics() {
-	stats, err := a.Stats.Map()
-	if err != nil {
-		log.Println("error convert stats to map: ", err)
-	}
+	wg := sync.WaitGroup{}
+	wg.Add(len(a.metrics))
 
-	for types, typesData := range stats {
-		for k, v := range typesData.(map[string]interface{}) {
-			vStr := strconv.FormatFloat(v.(float64), 'f', -1, 64)
-			a.postUpdate(types, k, vStr)
-		}
+	// Запуск параллельной отправки метрик горутинами
+	for _, metric := range a.metrics {
+		go func(metric *Metrics) {
+			defer wg.Done()
+			resp, err := a.postUpdate(metric)
+			if err != nil {
+				log.Printf("%s, metric: %v", err.Error(), metric)
+				return
+			}
+			log.Printf("post update: metric: %v, URI: %s, Status Code: %d", metric, resp.Request.URL, resp.StatusCode())
+		}(metric)
 	}
+	wg.Wait()
 }
