@@ -1,8 +1,9 @@
 package client
 
 import (
-	"encoding/json"
+	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -49,7 +50,7 @@ func (a *Agent) Run() {
 }
 
 // Метод отправки запроса "POST /update"
-func (a *Agent) postUpdate(metric []byte) *resty.Response {
+func (a *Agent) postUpdate(metric *Metrics) (*resty.Response, error) {
 	URL := a.baseURL + "/update"
 
 	// Формирования и выполнение запроса
@@ -59,21 +60,28 @@ func (a *Agent) postUpdate(metric []byte) *resty.Response {
 		SetBody(metric).
 		Post(URL)
 	if err != nil {
-		log.Println("post update error:", err)
+		return nil, fmt.Errorf("post update error: %w", err)
 	}
 
-	log.Println("Request Post Update", resp.Request.URL, string(resp.Request.Body.([]byte)))
-
-	return resp
+	return resp, nil
 }
 
 // Метод отправки метрик
 func (a *Agent) sendMetrics() {
+	wg := sync.WaitGroup{}
+	wg.Add(len(a.metrics))
+
+	// Запуск параллельной отправки метрик горутинами
 	for _, metric := range a.metrics {
-		resp, err := json.Marshal(metric)
-		if err != nil {
-			log.Println("json marshal error:", err)
-		}
-		a.postUpdate(resp)
+		go func(metric *Metrics) {
+			defer wg.Done()
+			resp, err := a.postUpdate(metric)
+			if err != nil {
+				log.Printf("%s, metric: %v", err.Error(), metric)
+				return
+			}
+			log.Printf("post update: metric: %v, URI: %s, Status Code: %d", metric, resp.Request.URL, resp.StatusCode())
+		}(metric)
 	}
+	wg.Wait()
 }

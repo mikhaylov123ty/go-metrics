@@ -226,6 +226,7 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.Println("get handler: read repo:", err)
 		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
 
 	// Проверка пустой даты
@@ -248,6 +249,7 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.Println("get handler: marshal data:", err)
 		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	// Передача данных в ответ
