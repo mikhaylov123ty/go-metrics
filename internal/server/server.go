@@ -85,6 +85,9 @@ func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
 
 	// index
 	router.Get("/", s.withGZipEncode(s.withLogger(handler.IndexGet)))
+
+	// /ping
+	router.Get("/ping", s.withLogger(handler.PingGet))
 }
 
 // middleware для эндпоинтов для логирования

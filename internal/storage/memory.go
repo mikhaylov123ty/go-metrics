@@ -52,3 +52,7 @@ func (m *MemoryStorage) Delete(id string) error {
 	delete(m.metrics, id)
 	return nil
 }
+
+func (m *MemoryStorage) Ping() error {
+	return nil
+}

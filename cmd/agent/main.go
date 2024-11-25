@@ -8,13 +8,13 @@ import (
 
 func main() {
 	// Инициализация флагов агента
-	config, err := newConfig()
+	config, err := NewConfig()
 	if err != nil {
 		log.Fatal("Build Agent Config Error:", err)
 	}
 
 	// Инициализация инстанса агента
-	agentInstance := client.NewAgent(config.String(), config.pollInterval, config.reportInterval)
+	agentInstance := client.NewAgent(config.String(), config.PollInterval, config.ReportInterval)
 
 	// Запуск агента
 	agentInstance.Run()

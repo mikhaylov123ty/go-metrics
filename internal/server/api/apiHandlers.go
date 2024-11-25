@@ -325,3 +325,14 @@ func (h *Handler) IndexGet(w http.ResponseWriter, req *http.Request) {
 		log.Println("get handler error:", err)
 	}
 }
+
+// Метод ручки "GET /ping"
+func (h *Handler) PingGet(w http.ResponseWriter, req *http.Request) {
+	if err := h.repo.Ping(); err != nil {
+		log.Println("ping handler error:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
