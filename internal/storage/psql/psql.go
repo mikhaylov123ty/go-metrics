@@ -78,10 +78,13 @@ func (db *DataBase) ReadAll() ([]*storage.Data, error) {
 	}
 
 	rows, err := db.Instance.Query(query, args...)
-	if err != nil && errors.Is(err, sql.ErrNoRows) {
+	if err != nil {
 		return nil, fmt.Errorf("querying all metrics: %w", err)
 	}
 	defer rows.Close()
+	if rows.Err() != nil {
+		return nil, fmt.Errorf("rows error: %w", rows.Err())
+	}
 
 	for rows.Next() {
 		row := storage.Data{}
