@@ -45,8 +45,6 @@ func NewConfig() (*ServerConfig, error) {
 		return nil, fmt.Errorf("error parsing environment variables: %w", err)
 	}
 
-	fmt.Println("CONFIG DB ADDRESS", config.DB.Address)
-
 	return config, nil
 }
 
@@ -66,7 +64,7 @@ func (s *ServerConfig) parseFlags() {
 	flag.BoolVar(&s.FileStorage.Restore, "r", true, "Restore previous metrics from file.")
 
 	// Флаги БД
-	flag.StringVar(&s.DB.Address, "d", "", "Host which to connect to DB. Example: \"localhost\"")
+	flag.StringVar(&s.DB.Address, "d", "", "Host which to connect to DB. Example: \"postgres://postgres:postgres@postgres:5432/praktikum?sslmode=disable\"")
 
 	_ = flag.Value(s)
 	flag.Var(s, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
@@ -106,7 +104,6 @@ func (s *ServerConfig) parseEnv() error {
 	}
 
 	if address := os.Getenv("DATABASE_DSN"); address != "" {
-		fmt.Println("DATABASE_DSN", address)
 		s.DB.Address = address
 	}
 

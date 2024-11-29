@@ -2,9 +2,11 @@ package main
 
 import (
 	"log"
-	"metrics/internal/storage"
+
+	"metrics/internal/storage/psql"
 
 	"metrics/internal/server"
+	"metrics/internal/storage"
 	"metrics/pkg/logger"
 )
 
@@ -19,13 +21,17 @@ func main() {
 	var storageInstance storage.Storage
 	switch {
 	case config.DB.Address != "":
-		psqlStorage, err := storage.NewPSQLDataBase(
+		psqlStorage, err := psql.NewPSQLDataBase(
 			config.DB.Address,
 		)
 		if err != nil {
-			log.Fatal("Build Server Storage Error:", err)
+			log.Fatal("Build Server Storage Connection Error:", err)
 		}
-		defer psqlStorage.DB.Close()
+		defer psqlStorage.Instance.Close()
+
+		if err = psqlStorage.BootStrap(config.DB.Address); err != nil {
+			log.Fatal("Build Server Storage Bootstrap Error:", err)
+		}
 
 		storageInstance = psqlStorage
 

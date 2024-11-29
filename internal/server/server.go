@@ -201,26 +201,10 @@ func (s *Server) initMetricsFromFile() error {
 	// Разбивка по линиям файла
 	lines := strings.Split(string(fileData), "\n")
 	for _, line := range lines {
-		//Десериализация в буфер
-		bufData := map[string]any{}
-		if err = json.Unmarshal([]byte(line), &bufData); err != nil {
-			return fmt.Errorf("unmarshal metrics: %w", err)
-		}
-
-		// Конструктор хранилища даты
 		storageData := &storage.Data{}
-		storageData.Type = bufData["type"].(string)
-		storageData.Name = bufData["name"].(string)
-		dataID := storageData.UniqueID()
-
-		// Форматирование типа значения
-		if storageData.Type == "counter" {
-			value := int64(bufData["value"].(float64))
-			storageData.Value = &value
-		} else {
-			value := bufData["value"].(float64)
-			storageData.Value = &value
+		if err := json.Unmarshal([]byte(line), storageData); err != nil {
 		}
+		dataID := storageData.UniqueID()
 
 		// Забись в хранилище
 		if err = s.storage.Update(dataID, storageData); err != nil {

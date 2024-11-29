@@ -23,6 +23,7 @@ func NewHandler(repo storage.Storage) *Handler {
 // Метод ручки "POST /update с телом JSON"
 func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	var err error
+
 	// Проверка хедера
 	if req.Header.Get("Content-Type") != "application/json" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -38,34 +39,28 @@ func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Десериализация тела запроса
-	metrics := Metrics{}
-	if err = json.Unmarshal(body, &metrics); err != nil {
+	storageData := storage.Data{}
+	if err = json.Unmarshal(body, &storageData); err != nil {
 		log.Println("failed unmarshall request body", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	// Проверка пустых значений
-	if metrics.Value == nil && metrics.Delta == nil {
+	if storageData.Value == nil && storageData.Delta == nil {
 		log.Println("empty metrics data")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if metrics.Value == nil && metrics.MType == "gauge" {
+	if storageData.Value == nil && storageData.Type == "gauge" {
 		log.Println("wrong gauge metrics data")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if metrics.Delta == nil && metrics.MType == "counter" {
+	if storageData.Delta == nil && storageData.Type == "counter" {
 		log.Println("wrong gauge metrics data")
 		w.WriteHeader(http.StatusBadRequest)
 		return
-	}
-
-	// Конструктор даты хранилища
-	storageData := &storage.Data{
-		Type: metrics.MType,
-		Name: metrics.ID,
 	}
 
 	// Формирование уникального идентификатора
@@ -74,24 +69,21 @@ func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	// Проверка типа метрики
 	switch storageData.Type {
 	case "counter":
-		// Форматирование и присвоение значения counter
-		storageData.Value = metrics.Delta
+		// Поиск предыдущего значения counter
 		prevData, err := h.repo.Read(dataID)
 		if err != nil {
-			log.Println(err)
+			log.Println("failed read previous counter data:", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		// Сложение значений, если найдено в хранилище
 		if prevData != nil {
-			sumValue := *storageData.Value.(*int64) + *prevData.Value.(*int64)
-			storageData.Value = &sumValue
+			sumValue := *storageData.Delta + *prevData.Delta
+			storageData.Delta = &sumValue
 		}
-
 	case "gauge":
-		// Форматирование и присвоение значения counter
-		storageData.Value = metrics.Value
+		//do nothing
 
 	default:
 		log.Println("invalid data type:", storageData.Type)
@@ -100,7 +92,7 @@ func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Обновление или сохранение новой записи в хранилище
-	if err = h.repo.Update(dataID, storageData); err != nil {
+	if err = h.repo.Update(dataID, &storageData); err != nil {
 		log.Println("update handler error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -127,13 +119,13 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	switch storageData.Type {
 	case "counter":
 		// Форматирование и присвоение значения counter
-		value, err := strconv.ParseInt(req.PathValue("value"), 10, 64)
+		delta, err := strconv.ParseInt(req.PathValue("value"), 10, 64)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			log.Println("invalid new data:", err)
 			return
 		}
-		storageData.Value = &value
+		storageData.Delta = &delta
 
 		// Поиск предыдущего значения counter
 		prevData, err := h.repo.Read(dataID)
@@ -145,8 +137,8 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 
 		// Сложение значений, если найдено в хранилище
 		if prevData != nil {
-			sumValue := *storageData.Value.(*int64) + *prevData.Value.(*int64)
-			storageData.Value = &sumValue
+			sumDelta := *storageData.Delta + *prevData.Delta
+			storageData.Delta = &sumDelta
 		}
 
 	case "gauge":
@@ -166,7 +158,7 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Проверка пустых значений
-	if storageData.Value == nil || storageData.Type == "" || storageData.Name == "" {
+	if (storageData.Value == nil && storageData.Delta == nil) || storageData.Type == "" || storageData.Name == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -199,30 +191,18 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Десериализация тела
-	metrics := Metrics{}
-	if err = json.Unmarshal(body, &metrics); err != nil {
+	storageData := storage.Data{}
+	if err = json.Unmarshal(body, &storageData); err != nil {
 		log.Println("failed unmarshall request body", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
-	}
-
-	// Проверка пустых значений
-	if metrics.MType == "" || metrics.ID == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	//Конструктор даты хранилища
-	storageData := &storage.Data{
-		Type: metrics.MType,
-		Name: metrics.ID,
 	}
 
 	// Формирование уникального идентификатора
 	dataID := storageData.UniqueID()
 
 	// Получение данных записи
-	data, err := h.repo.Read(dataID)
+	metric, err := h.repo.Read(dataID)
 	if err != nil {
 		log.Println("get handler: read repo:", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -230,22 +210,13 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Проверка пустой даты
-	if data == nil {
+	if metric == nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	// Форматирование значение в зависимости от типа
-	if metrics.MType == "counter" {
-		delta := data.Value.(*int64)
-		metrics.Delta = delta
-	} else {
-		value := data.Value.(*float64)
-		metrics.Value = value
-	}
-
 	// Сериализация данных
-	response, err := json.Marshal(metrics)
+	response, err := json.Marshal(metric)
 	if err != nil {
 		log.Println("get handler: marshal data:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -281,12 +252,22 @@ func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	var response []byte
 	// Сериализация данных
-	response, err := json.Marshal(data.Value)
-	if err != nil {
-		log.Println("get handler: marshal data:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+	if data.Type == "counter" {
+		response, err = json.Marshal(data.Delta)
+		if err != nil {
+			log.Println("get handler: marshal data:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	} else {
+		response, err = json.Marshal(data.Value)
+		if err != nil {
+			log.Println("get handler: marshal data:", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Передача данных в ответ

@@ -3,8 +3,12 @@ package client
 import (
 	"fmt"
 	"log"
+	"math/rand/v2"
+	"runtime"
 	"sync"
 	"time"
+
+	"metrics/internal/storage"
 
 	"github.com/go-resty/resty/v2"
 )
@@ -15,7 +19,7 @@ type Agent struct {
 	client         *resty.Client
 	pollInterval   int
 	reportInterval int
-	metrics        []*Metrics
+	metrics        []*storage.Data
 	statsBuf       statsBuf
 }
 
@@ -49,8 +53,56 @@ func (a *Agent) Run() {
 	}
 }
 
+// Метод сбора метрик с счетчиком
+func collectMetrics(statsBuf *Stats) statsBuf {
+	counter := 1
+	return func() *Stats {
+		// Чтение метрик
+		rt := &runtime.MemStats{}
+		runtime.ReadMemStats(rt)
+
+		// Присвоение полей для каждой метрики
+		(*statsBuf)["Alloc"] = float64(rt.Alloc)
+		(*statsBuf)["BuckHashSys"] = float64(rt.BuckHashSys)
+		(*statsBuf)["Frees"] = float64(rt.Frees)
+		(*statsBuf)["GCCPUFraction"] = float64(rt.GCCPUFraction)
+		(*statsBuf)["GCSys"] = float64(rt.GCSys)
+		(*statsBuf)["HeapAlloc"] = float64(rt.HeapAlloc)
+		(*statsBuf)["HeapIdle"] = float64(rt.HeapIdle)
+		(*statsBuf)["HeapInuse"] = float64(rt.HeapInuse)
+		(*statsBuf)["HeapObjects"] = float64(rt.HeapObjects)
+		(*statsBuf)["HeapReleased"] = float64(rt.HeapReleased)
+		(*statsBuf)["HeapSys"] = float64(rt.HeapSys)
+		(*statsBuf)["LastGC"] = float64(rt.LastGC)
+		(*statsBuf)["Lookups"] = float64(rt.Lookups)
+		(*statsBuf)["MCacheInuse"] = float64(rt.MCacheInuse)
+		(*statsBuf)["MCacheSys"] = float64(rt.MCacheSys)
+		(*statsBuf)["MSpanInuse"] = float64(rt.MSpanInuse)
+		(*statsBuf)["MSpanSys"] = float64(rt.MSpanSys)
+		(*statsBuf)["Mallocs"] = float64(rt.Mallocs)
+		(*statsBuf)["NextGC"] = float64(rt.NextGC)
+		(*statsBuf)["NumForcedGC"] = float64(rt.NumForcedGC)
+		(*statsBuf)["NumGC"] = float64(rt.NumGC)
+		(*statsBuf)["OtherSys"] = float64(rt.OtherSys)
+		(*statsBuf)["PauseTotalNs"] = float64(rt.PauseTotalNs)
+		(*statsBuf)["StackInuse"] = float64(rt.StackInuse)
+		(*statsBuf)["StackSys"] = float64(rt.StackSys)
+		(*statsBuf)["Sys"] = float64(rt.Sys)
+		(*statsBuf)["TotalAlloc"] = float64(rt.TotalAlloc)
+
+		// Генерация произвольного значения
+		(*statsBuf)["RandomValue"] = rand.Float64()
+
+		// Увеличение счетчика
+		(*statsBuf)["PollCount"] = int64(counter)
+		counter++
+
+		return statsBuf
+	}
+}
+
 // Метод отправки запроса "POST /update"
-func (a *Agent) postUpdate(metric *Metrics) (*resty.Response, error) {
+func (a *Agent) postUpdate(metric *storage.Data) (*resty.Response, error) {
 	URL := a.baseURL + "/update"
 
 	// Формирования и выполнение запроса
@@ -73,7 +125,7 @@ func (a *Agent) sendMetrics() {
 
 	// Запуск параллельной отправки метрик горутинами
 	for _, metric := range a.metrics {
-		go func(metric *Metrics) {
+		go func(metric *storage.Data) {
 			defer wg.Done()
 			resp, err := a.postUpdate(metric)
 			if err != nil {
