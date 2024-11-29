@@ -78,7 +78,7 @@ func (db *DataBase) ReadAll() ([]*storage.Data, error) {
 	}
 
 	rows, err := db.Instance.Query(query, args...)
-	if err != nil {
+	if err != nil && errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("querying all metrics: %w", err)
 	}
 	defer rows.Close()
