@@ -202,7 +202,8 @@ func (s *Server) initMetricsFromFile() error {
 	lines := strings.Split(string(fileData), "\n")
 	for _, line := range lines {
 		storageData := &storage.Data{}
-		if err := json.Unmarshal([]byte(line), storageData); err != nil {
+		if err = json.Unmarshal([]byte(line), storageData); err != nil {
+			return fmt.Errorf("unmarshal metrics: %w", err)
 		}
 		dataID := storageData.UniqueID()
 
