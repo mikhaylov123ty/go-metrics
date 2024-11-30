@@ -3,10 +3,9 @@ package main
 import (
 	"log"
 
-	"metrics/internal/storage/psql"
-
 	"metrics/internal/server"
 	"metrics/internal/storage"
+	"metrics/internal/storage/psql"
 	"metrics/pkg/logger"
 )
 
@@ -34,8 +33,10 @@ func main() {
 		}
 
 		storageInstance = psqlStorage
+		log.Println("Storage: postgres")
 
 	default:
+		log.Println("Storage: memory")
 		storageInstance = storage.NewMemoryStorage()
 	}
 

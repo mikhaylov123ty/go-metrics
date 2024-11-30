@@ -14,10 +14,12 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+// Структура хранилища
 type DataBase struct {
 	Instance *sql.DB
 }
 
+// Конструктор PostgreSQL
 func NewPSQLDataBase(connectionString string) (*DataBase, error) {
 	db, err := sql.Open("pgx", connectionString)
 	if err != nil {
@@ -31,12 +33,15 @@ func NewPSQLDataBase(connectionString string) (*DataBase, error) {
 	return &DataBase{Instance: db}, nil
 }
 
+// Метод подготовки БД
 func (db *DataBase) BootStrap(connectionString string) error {
+	// Создание новой миграции
 	migration, err := migrate.New("file://./internal/storage/psql/migrations", connectionString)
 	if err != nil {
 		return fmt.Errorf("creation migration database: %w", err)
 	}
 
+	// Запуск миграции
 	if err = migration.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("migrating up database: %w", err)
 	}
@@ -44,18 +49,21 @@ func (db *DataBase) BootStrap(connectionString string) error {
 	return nil
 }
 
-func (db *DataBase) Read(id string) (*storage.Data, error) {
+// Метод получения записи из хранилища по id
+func (db *DataBase) Read(name string) (*storage.Data, error) {
 	res := storage.Data{}
 
+	// Формирование строки запроса и аргументов
 	query, args, err := sq.Select("type, name, value, delta").
 		From("metrics").
-		Where(sq.Eq{"unique_id": id}).
+		Where(sq.Eq{"name": name}).
 		PlaceholderFormat(sq.Dollar).
 		ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("building query data from metrics: %w", err)
 	}
 
+	// Запрос в базу
 	row := db.Instance.QueryRow(query, args...)
 	if err = row.Scan(&res.Type, &res.Name, &res.Value, &res.Delta); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -67,9 +75,11 @@ func (db *DataBase) Read(id string) (*storage.Data, error) {
 	return &res, nil
 }
 
+// Метод получения записей из хранилища
 func (db *DataBase) ReadAll() ([]*storage.Data, error) {
 	res := make([]*storage.Data, 0)
 
+	// Формирование строки запроса и аргументов
 	query, args, err := sq.Select("type, name, value, delta").
 		From("metrics").
 		ToSql()
@@ -77,6 +87,7 @@ func (db *DataBase) ReadAll() ([]*storage.Data, error) {
 		return nil, fmt.Errorf("building query metrics: %w", err)
 	}
 
+	// Выполнение запроса
 	rows, err := db.Instance.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("querying all metrics: %w", err)
@@ -86,6 +97,7 @@ func (db *DataBase) ReadAll() ([]*storage.Data, error) {
 		return nil, fmt.Errorf("rows error: %w", rows.Err())
 	}
 
+	// Сканирование строк
 	for rows.Next() {
 		row := storage.Data{}
 		if err = rows.Scan(&row.Type, &row.Name, &row.Value, &row.Delta); err != nil {
@@ -98,34 +110,80 @@ func (db *DataBase) ReadAll() ([]*storage.Data, error) {
 	return res, nil
 }
 
-func (db *DataBase) Update(id string, query *storage.Data) error {
-	_, err := db.Instance.Exec(`INSERT INTO metrics (unique_id, type, name, value, delta)
-										VALUES($1,$2,$3,$4,$5)
-ON CONFLICT (unique_id) DO UPDATE 
-SET type = $2,
-    name = $3,
-    value = $4,
-delta = $5
-    ;`,
-		sql.Named("id", id),
-		sql.Named("type", query.Type),
-		sql.Named("name", query.Name),
-		sql.Named("value", query.Value),
-		sql.Named("delta", query.Delta),
-	)
+// Метод создания или обновления существующей записи в хранилище
+func (db *DataBase) Update(query *storage.Data) error {
+	// Начало транзакции
+	tx, err := db.Instance.Begin()
 	if err != nil {
+		return fmt.Errorf("starting transaction: %w", err)
+	}
+
+	// Выполнение запроса
+	if _, err = tx.Exec(`
+		INSERT INTO metrics (name, type, value, delta)
+		VALUES($1,$2,$3,$4)
+		ON CONFLICT (name) DO UPDATE 
+		SET
+			value = excluded.value,
+			delta = metrics.delta + excluded.delta;`,
+		query.Name,
+		query.Type,
+		query.Value,
+		query.Delta); err != nil {
+		tx.Rollback()
 		return fmt.Errorf("updating metrics: %w", err)
 	}
 
-	return nil
+	// Коммит транзакции
+	return tx.Commit()
 }
 
+// Метод создания или обновление существующих записей в хранилище
+func (db *DataBase) UpdateBatch(queries []*storage.Data) error {
+	// Начало транзакции
+	tx, err := db.Instance.Begin()
+	if err != nil {
+		return fmt.Errorf("starting transaction: %w", err)
+	}
+
+	// Парсинг запроса в контексте транзакции
+	statement, err := tx.Prepare(`
+		INSERT INTO metrics (name, type, value, delta)
+		VALUES($1,$2,$3,$4)
+		ON CONFLICT (name) DO UPDATE 
+		SET 
+			value = excluded.value,
+			delta = metrics.delta + excluded.delta;`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("preparing transaction: %w", err)
+	}
+	defer statement.Close()
+
+	// Проход по метрикам и запись в базу
+	for _, query := range queries {
+		if _, err = statement.Exec(
+			query.Name,
+			query.Type,
+			query.Value,
+			query.Delta); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("updating metric: %w", err)
+		}
+	}
+
+	// Коммит транзакции
+	return tx.Commit()
+}
+
+// Метод удаления записи из хранилища
 func (db *DataBase) Delete(id string) error {
 	fmt.Println("Delete psql database")
 
 	return nil
 }
 
+// Метод проверки доступности БД
 func (db *DataBase) Ping() error {
 	if err := db.Instance.Ping(); err != nil {
 		return err

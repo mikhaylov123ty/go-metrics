@@ -1,6 +1,8 @@
 package client
 
-import "metrics/internal/storage"
+import (
+	"metrics/internal/storage"
+)
 
 // Алиасы для типов
 type (

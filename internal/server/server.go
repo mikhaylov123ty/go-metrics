@@ -40,12 +40,14 @@ func New(storage storage.Storage, logger *logrus.Logger, storeInterval int, file
 // Метод запуска сервера
 func (s *Server) Start(address string) {
 
+	// Инициализация даты из файла
 	if s.restore {
 		if err := s.initMetricsFromFile(); err != nil {
 			s.logger.Fatal("error restore metrics from file: ", err)
 		}
 	}
 
+	// Запуск горутины сохранения метрик с интервалом
 	go func() {
 		for {
 			time.Sleep(time.Duration(s.storeInterval) * time.Second)
@@ -77,6 +79,11 @@ func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
 		r.Post("/{type}/{name}/{value}", s.withGZipEncode(s.withLogger(handler.UpdatePost)))
 	})
 
+	// /updates
+	router.Route("/updates", func(r chi.Router) {
+		r.Post("/", s.withGZipEncode(s.withLogger(handler.UpdatesPostJSON)))
+	})
+
 	// /value
 	router.Route("/value", func(r chi.Router) {
 		r.Post("/", s.withGZipEncode(s.withLogger(handler.ValueGetJSON)))
@@ -90,7 +97,7 @@ func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
 	router.Get("/ping", s.withLogger(handler.PingGet))
 }
 
-// middleware для эндпоинтов для логирования
+// middleware эндпоинтов для логирования
 func (s *Server) withLogger(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -107,12 +114,12 @@ func (s *Server) withLogger(next http.HandlerFunc) http.HandlerFunc {
 		// Переход к следующему хендлеру
 		next(lw, r)
 
-		s.logger.Infof("Incoming HTTP Request: URI: %s, Method: %v, Headers: %v, Time Duration: %v", r.RequestURI, r.Method, r.Header, time.Since(start))
+		s.logger.Infof("Incoming HTTP Request: URI: %s, Method: %v, Time Duration: %v", r.RequestURI, r.Method, time.Since(start))
 		s.logger.Infof("Outgoing HTTP Response: Status Code: %v, Content Length:%v", lw.ResponseData.Status, lw.ResponseData.Size)
 	}
 }
 
-// middleware для компрессии
+// middleware эндпоинтов для компрессии
 func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Accept") != "application/json" && r.Header.Get("Accept") != "text/html" {
@@ -157,6 +164,7 @@ func (s *Server) storeMetrics() error {
 		return nil
 	}
 
+	// Сериализация метрик
 	data := []byte{}
 	metricsLength := len(metrics) - 1
 	for i, v := range metrics {
@@ -173,11 +181,13 @@ func (s *Server) storeMetrics() error {
 
 	s.logger.Debugf("data:%s:endData", string(data))
 
+	// Создание/обновление файла
 	storageFile, err := os.Create(s.fileStoragePath)
 	if err != nil {
 		return fmt.Errorf("error create file: %w", err)
 	}
 
+	// Запись даты в файл
 	if _, err = storageFile.Write(data); err != nil {
 		return fmt.Errorf("write metrics: %w", err)
 	}
@@ -205,10 +215,9 @@ func (s *Server) initMetricsFromFile() error {
 		if err = json.Unmarshal([]byte(line), storageData); err != nil {
 			return fmt.Errorf("unmarshal metrics: %w", err)
 		}
-		dataID := storageData.UniqueID()
 
 		// Забись в хранилище
-		if err = s.storage.Update(dataID, storageData); err != nil {
+		if err = s.storage.Update(storageData); err != nil {
 			return fmt.Errorf("update metrics: %w", err)
 		}
 	}

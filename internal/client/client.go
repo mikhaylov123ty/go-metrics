@@ -1,6 +1,7 @@
 package client
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand/v2"
@@ -39,17 +40,18 @@ func (a *Agent) Run() {
 	// Запуск горутины по сбору метрик с интервалом pollInterval
 	go func() {
 		for {
-			a.metrics = a.statsBuf().buildMetrics()
-
 			time.Sleep(time.Duration(a.pollInterval) * time.Second)
+
+			a.metrics = a.statsBuf().buildMetrics()
 		}
 	}()
 
 	// Запуск бесконечного цикла отправки метрики с интервалом reportInterval
 	for {
-		a.sendMetrics()
-
 		time.Sleep(time.Duration(a.reportInterval) * time.Second)
+
+		a.sendMetrics()
+		a.sendMetricsBatch()
 	}
 }
 
@@ -118,6 +120,29 @@ func (a *Agent) postUpdate(metric *storage.Data) (*resty.Response, error) {
 	return resp, nil
 }
 
+// Метод отправки запроса "POST /updates"
+func (a *Agent) postUpdates() (*resty.Response, error) {
+	URL := a.baseURL + "/updates"
+
+	// Сериализация метрик
+	body, err := json.Marshal(a.metrics)
+	if err != nil {
+		return nil, fmt.Errorf("post updates marshal error: %w", err)
+	}
+
+	// Формирование и выполнение запроса
+	resp, err := a.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Accept-Encoding", "gzip").
+		SetBody(body).
+		Post(URL)
+	if err != nil {
+		return nil, fmt.Errorf("post updates error: %w", err)
+	}
+
+	return resp, nil
+}
+
 // Метод отправки метрик
 func (a *Agent) sendMetrics() {
 	wg := sync.WaitGroup{}
@@ -135,5 +160,17 @@ func (a *Agent) sendMetrics() {
 			log.Printf("post update: metric: %v, URI: %s, Status Code: %d", metric, resp.Request.URL, resp.StatusCode())
 		}(metric)
 	}
+
 	wg.Wait()
+}
+
+// Метод отправки метрик батчами
+func (a *Agent) sendMetricsBatch() {
+	resp, err := a.postUpdates()
+	if err != nil {
+		log.Printf("error batch post updates: %s", err.Error())
+		return
+	}
+
+	log.Printf("post update: metrics:  URI: %s, Status Code: %d", resp.Request.URL, resp.StatusCode())
 }

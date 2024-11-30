@@ -51,9 +51,8 @@ func NewConfig() (*ServerConfig, error) {
 // Конструктор инструкций флагов сервера
 func (s *ServerConfig) parseFlags() {
 	// Базовые флаги
-	flag.StringVar(&s.Host, "h", "localhost", "Host on which to listen. Example: \"localhost\"")
-	flag.StringVar(&s.Port, "p", "8080", "Port on which to listen. Example: \"8080\"")
-	flag.StringVar(&s.ConfigFile, "c", "./cmd/server/config.yaml", "Path to config file. Example: \"./cmd/server/config.yaml\"")
+	flag.StringVar(&s.Host, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
+	flag.StringVar(&s.Port, "port", "8080", "Port on which to listen. Example: \"8080\"")
 
 	// Флаги логирования
 	flag.StringVar(&s.Logger.LogLevel, "l", "info", "Log level. Example: \"info\"")
