@@ -37,6 +37,8 @@ func NewAgent(baseURL string, pollInterval int, reportInterval int) *Agent {
 
 // Запуск агента
 func (a *Agent) Run() {
+	wg := &sync.WaitGroup{}
+
 	// Запуск горутины по сбору метрик с интервалом pollInterval
 	go func() {
 		for {
@@ -50,8 +52,21 @@ func (a *Agent) Run() {
 	for {
 		time.Sleep(time.Duration(a.reportInterval) * time.Second)
 
-		a.sendMetrics()
-		a.sendMetricsBatch()
+		wg.Add(2)
+
+		go func() {
+			a.sendMetrics()
+			wg.Done()
+		}()
+
+		go func() {
+			if err := a.sendMetricsBatch(); err != nil {
+				log.Println("Send metrics batch err:", err)
+			}
+			wg.Done()
+		}()
+
+		wg.Wait()
 	}
 }
 
@@ -152,7 +167,7 @@ func (a *Agent) sendMetrics() {
 	for _, metric := range a.metrics {
 		go func(metric *storage.Data) {
 			defer wg.Done()
-			resp, err := a.postUpdate(metric)
+			resp, err := metricFunc(a.postUpdate).withRetry(metric)
 			if err != nil {
 				log.Printf("%s, metric: %v", err.Error(), metric)
 				return
@@ -165,12 +180,12 @@ func (a *Agent) sendMetrics() {
 }
 
 // Метод отправки метрик батчами
-func (a *Agent) sendMetricsBatch() {
-	resp, err := a.postUpdates()
+func (a *Agent) sendMetricsBatch() error {
+	resp, err := batchFunc(a.postUpdates).withRetry()
 	if err != nil {
-		log.Printf("error batch post updates: %s", err.Error())
-		return
+		return err
 	}
 
-	log.Printf("post update: metrics:  URI: %s, Status Code: %d", resp.Request.URL, resp.StatusCode())
+	log.Printf("post batch updates: metrics:  URI: %s, Status Code: %d", resp.Request.URL, resp.StatusCode())
+	return nil
 }

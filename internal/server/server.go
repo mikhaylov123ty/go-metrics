@@ -103,9 +103,9 @@ func (s *Server) withLogger(next http.HandlerFunc) http.HandlerFunc {
 		start := time.Now()
 
 		// Создание обертки для ResponseWriter
-		lw := &api.LoggingResponseWriter{
+		lw := &LoggingResponseWriter{
 			ResponseWriter: w,
-			ResponseData: &api.ResponseData{
+			ResponseData: &ResponseData{
 				Status: 0,
 				Size:   0,
 			},
@@ -130,7 +130,7 @@ func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 
 		// Проверка хедеров
 		headers := strings.Split(r.Header.Get("Accept-Encoding"), ",")
-		if !api.ArrayContains(headers, "gzip") {
+		if !ArrayContains(headers, "gzip") {
 			next(w, r)
 			return
 		}
@@ -146,7 +146,7 @@ func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 
 		w.Header().Set("Content-Encoding", "gzip")
 
-		next(api.GzipWriter{ResponseWriter: w, Writer: gz}, r)
+		next(GzipWriter{ResponseWriter: w, Writer: gz}, r)
 	}
 }
 

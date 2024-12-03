@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"metrics/internal/storage"
+	"metrics/pkg"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/golang-migrate/migrate/v4"
@@ -26,7 +27,7 @@ func NewPSQLDataBase(connectionString string) (*DataBase, error) {
 		return nil, fmt.Errorf("opening database connection: %w", err)
 	}
 
-	if err = db.Ping(); err != nil {
+	if err = pkg.AnyFunc(db.Ping).WithRetry(); err != nil {
 		return nil, fmt.Errorf("pinging database: %w, connection string %s", err, connectionString)
 	}
 
@@ -185,7 +186,7 @@ func (db *DataBase) Delete(id string) error {
 
 // Метод проверки доступности БД
 func (db *DataBase) Ping() error {
-	if err := db.Instance.Ping(); err != nil {
+	if err := pkg.AnyFunc(db.Instance.Ping).WithRetry(); err != nil {
 		return err
 	}
 
