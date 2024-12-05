@@ -4,7 +4,8 @@ import (
 	"log"
 
 	"metrics/internal/server"
-	"metrics/internal/storage"
+	"metrics/internal/server/api"
+	"metrics/internal/storage/memory"
 	"metrics/internal/storage/psql"
 	"metrics/pkg/logger"
 )
@@ -17,7 +18,7 @@ func main() {
 	}
 
 	// Инициализация инстанса хранения данных
-	var storageInstance storage.Storage
+	var storageCommands *api.StorageCommands
 	switch {
 	case config.DB.Address != "":
 		psqlStorage, err := psql.NewPSQLDataBase(
@@ -32,12 +33,28 @@ func main() {
 			log.Fatal("Build Server Storage Bootstrap Error:", err)
 		}
 
-		storageInstance = psqlStorage
+		storageCommands = api.NewStorageService(
+			psqlStorage,
+			psqlStorage,
+			psqlStorage,
+			psqlStorage,
+			psqlStorage,
+		)
+
 		log.Println("Storage: postgres")
 
 	default:
+		memStorage := memory.NewMemoryStorage()
+
+		storageCommands = api.NewStorageService(
+			memStorage,
+			memStorage,
+			memStorage,
+			memStorage,
+			nil,
+		)
+
 		log.Println("Storage: memory")
-		storageInstance = storage.NewMemoryStorage()
 	}
 
 	// Инициализация инстанса логгера
@@ -48,7 +65,7 @@ func main() {
 
 	// Инициализация инстанса сервера
 	serverInstance := server.New(
-		storageInstance,
+		storageCommands,
 		loggerInstance,
 		config.FileStorage.StoreInterval,
 		config.FileStorage.FileStoragePath,

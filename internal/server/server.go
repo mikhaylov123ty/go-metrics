@@ -19,17 +19,22 @@ import (
 
 // Структура сервера
 type Server struct {
-	storage         storage.Storage
+	services        services
 	logger          *logrus.Logger
 	storeInterval   int
 	fileStoragePath string
 	restore         bool
 }
 
+type services struct {
+	storageCommands *api.StorageCommands
+}
+
 // Конструктор инстанса сервера
-func New(storage storage.Storage, logger *logrus.Logger, storeInterval int, fileStoragePath string, restore bool) *Server {
+func New(storageCommands *api.StorageCommands, logger *logrus.Logger, storeInterval int, fileStoragePath string, restore bool) *Server {
 	return &Server{
-		storage:         storage,
+		services: services{
+			storageCommands: storageCommands},
 		logger:          logger,
 		storeInterval:   storeInterval,
 		fileStoragePath: fileStoragePath,
@@ -62,7 +67,7 @@ func (s *Server) Start(address string) {
 	router := chi.NewRouter()
 
 	// Назначение соответствий хендлеров
-	s.addHandlers(router, api.NewHandler(s.storage))
+	s.addHandlers(router, api.NewHandler(s.services.storageCommands))
 
 	// Старт сервера
 	s.logger.Infof("Starting server on %v", address)
@@ -153,7 +158,7 @@ func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 // Метод записи метрик в файл
 func (s *Server) storeMetrics() error {
 	// Чтение всех метрик из хранилища
-	metrics, err := s.storage.ReadAll()
+	metrics, err := s.services.storageCommands.ReadAll()
 	if err != nil {
 		return fmt.Errorf("read metrics: %w", err)
 	}
@@ -217,7 +222,7 @@ func (s *Server) initMetricsFromFile() error {
 		}
 
 		// Забись в хранилище
-		if err = s.storage.Update(storageData); err != nil {
+		if err = s.services.storageCommands.Update(storageData); err != nil {
 			return fmt.Errorf("update metrics: %w", err)
 		}
 	}

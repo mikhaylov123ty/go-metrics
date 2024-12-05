@@ -15,6 +15,10 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
+const (
+	migrateFilesPath = "file://./internal/storage/psql/migrations"
+)
+
 // Структура хранилища
 type DataBase struct {
 	Instance *sql.DB
@@ -37,7 +41,7 @@ func NewPSQLDataBase(connectionString string) (*DataBase, error) {
 // Метод подготовки БД
 func (db *DataBase) BootStrap(connectionString string) error {
 	// Создание новой миграции
-	migration, err := migrate.New("file://./internal/storage/psql/migrations", connectionString)
+	migration, err := migrate.New(migrateFilesPath, connectionString)
 	if err != nil {
 		return fmt.Errorf("creation migration database: %w", err)
 	}
@@ -175,13 +179,6 @@ func (db *DataBase) UpdateBatch(queries []*storage.Data) error {
 
 	// Коммит транзакции
 	return tx.Commit()
-}
-
-// Метод удаления записи из хранилища
-func (db *DataBase) Delete(id string) error {
-	fmt.Println("Delete psql database")
-
-	return nil
 }
 
 // Метод проверки доступности БД

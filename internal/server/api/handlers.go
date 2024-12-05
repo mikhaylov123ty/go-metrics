@@ -12,12 +12,52 @@ import (
 
 // Структура хендлера
 type Handler struct {
-	repo storage.Storage
+	storageCommands *StorageCommands
 }
 
-// Конструктор обработчика
-func NewHandler(repo storage.Storage) *Handler {
-	return &Handler{repo: repo}
+// Комманды хендлера
+type StorageCommands struct {
+	read
+	readAll
+	update
+	updateBatch
+	ping
+}
+
+// Интерфейсы хендлера
+type read interface {
+	Read(string) (*storage.Data, error)
+}
+type readAll interface {
+	ReadAll() ([]*storage.Data, error)
+}
+type update interface {
+	Update(*storage.Data) error
+}
+type updateBatch interface {
+	UpdateBatch([]*storage.Data) error
+}
+type ping interface {
+	Ping() error
+}
+
+// Конструктор хендлера
+func NewHandler(storageCommands *StorageCommands) *Handler {
+	return &Handler{
+		storageCommands: storageCommands,
+	}
+}
+
+// Конструктор  сервиса, т.к. размещение инетрфейсов по месту использования
+// предполгает, что они неимпортируемые
+func NewStorageService(read read, readAll readAll, update update, updateBatch updateBatch, ping ping) *StorageCommands {
+	return &StorageCommands{
+		read:        read,
+		readAll:     readAll,
+		update:      update,
+		updateBatch: updateBatch,
+		ping:        ping,
+	}
 }
 
 // Метод ручки "POST /update с телом JSON"
@@ -54,7 +94,7 @@ func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Обновление или сохранение новой записи в хранилище
-	if err = h.repo.Update(&storageData); err != nil {
+	if err = h.storageCommands.Update(&storageData); err != nil {
 		log.Println("update handler error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -107,7 +147,7 @@ func (h *Handler) UpdatesPostJSON(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Обновление или сохранение новой записи в хранилище
-	if err = h.repo.UpdateBatch(storageData); err != nil {
+	if err = h.storageCommands.UpdateBatch(storageData); err != nil {
 		log.Println("update handler error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -162,7 +202,7 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Обновление или сохранение новой записи в хранилище
-	if err = h.repo.Update(storageData); err != nil {
+	if err = h.storageCommands.Update(storageData); err != nil {
 		log.Println("update handler error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -197,7 +237,7 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Получение данных записи
-	metric, err := h.repo.Read(storageData.Name)
+	metric, err := h.storageCommands.Read(storageData.Name)
 	if err != nil {
 		log.Println("get handler: read repo:", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -236,7 +276,7 @@ func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Получение данных записи
-	data, err := h.repo.Read(req.PathValue("name"))
+	data, err := h.storageCommands.Read(req.PathValue("name"))
 	if err != nil {
 		log.Println("get handler: read repo:", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -278,7 +318,7 @@ func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 // Метод ручки "GET /"
 func (h *Handler) IndexGet(w http.ResponseWriter, req *http.Request) {
 	// Получение всех записей
-	data, err := h.repo.ReadAll()
+	data, err := h.storageCommands.ReadAll()
 	if err != nil {
 		log.Println("get handler error:", err)
 	}
@@ -307,7 +347,12 @@ func (h *Handler) IndexGet(w http.ResponseWriter, req *http.Request) {
 
 // Метод ручки "GET /ping"
 func (h *Handler) PingGet(w http.ResponseWriter, req *http.Request) {
-	if err := h.repo.Ping(); err != nil {
+	if h.storageCommands.ping == nil {
+		log.Println("working from memory")
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if err := h.storageCommands.Ping(); err != nil {
 		log.Println("ping handler error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
