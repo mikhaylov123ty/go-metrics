@@ -17,9 +17,13 @@ const (
 	interval = 2 * time.Second
 )
 
-// Вспомогательные типы для методов функций
-type metricFunc func(*storage.Data) (*resty.Response, error)
-type batchFunc func() (*resty.Response, error)
+type (
+	// Вспомогательные типы для методов функций
+	metricFunc func(*storage.Data) (*resty.Response, error)
+	batchFunc  func() (*resty.Response, error)
+	Stats      map[string]interface{}
+	statsBuf   func() *Stats
+)
 
 // Метод повтора функции отправки метрик на сервер
 func (mf metricFunc) withRetry(metric *storage.Data) (*resty.Response, error) {
@@ -72,4 +76,22 @@ func (bf batchFunc) withRetry() (*resty.Response, error) {
 		}
 	}
 	return nil, fmt.Errorf("failed after %d attempts", attempts)
+}
+
+// Метод конструктора метрик в структры
+func (s *Stats) buildMetrics() []*storage.Data {
+	res := []*storage.Data{}
+	for k, v := range *s {
+		metric := storage.Data{Name: k}
+		switch t := v.(type) {
+		case float64:
+			metric.Type = "gauge"
+			metric.Value = &t
+		case int64:
+			metric.Type = "counter"
+			metric.Delta = &t
+		}
+		res = append(res, &metric)
+	}
+	return res
 }
