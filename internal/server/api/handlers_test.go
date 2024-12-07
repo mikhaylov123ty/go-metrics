@@ -2,7 +2,7 @@ package api
 
 import (
 	"github.com/stretchr/testify/assert"
-	"metrics/internal/storage"
+	"metrics/internal/storage/memory"
 	"net/http/httptest"
 	"testing"
 )
@@ -69,8 +69,14 @@ func TestHandler_Update(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
-			handler := NewHandler(storage.NewMemoryStorage())
+			newMemStorage := memory.NewMemoryStorage()
+			commands := &StorageCommands{
+				read:        newMemStorage,
+				readAll:     newMemStorage,
+				update:      newMemStorage,
+				updateBatch: newMemStorage,
+			}
+			handler := NewHandler(commands)
 			request := httptest.NewRequest(tt.args.method, tt.args.url, nil)
 			request.Header.Add("Content-Type", tt.args.contentType)
 			request.SetPathValue("type", tt.args.metricType)

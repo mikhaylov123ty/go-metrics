@@ -19,17 +19,22 @@ import (
 
 // Структура сервера
 type Server struct {
-	storage         storage.Storage
+	services        services
 	logger          *logrus.Logger
 	storeInterval   int
 	fileStoragePath string
 	restore         bool
 }
 
+type services struct {
+	storageCommands *api.StorageCommands
+}
+
 // Конструктор инстанса сервера
-func New(storage storage.Storage, logger *logrus.Logger, storeInterval int, fileStoragePath string, restore bool) *Server {
+func New(storageCommands *api.StorageCommands, logger *logrus.Logger, storeInterval int, fileStoragePath string, restore bool) *Server {
 	return &Server{
-		storage:         storage,
+		services: services{
+			storageCommands: storageCommands},
 		logger:          logger,
 		storeInterval:   storeInterval,
 		fileStoragePath: fileStoragePath,
@@ -40,12 +45,14 @@ func New(storage storage.Storage, logger *logrus.Logger, storeInterval int, file
 // Метод запуска сервера
 func (s *Server) Start(address string) {
 
+	// Инициализация даты из файла
 	if s.restore {
 		if err := s.initMetricsFromFile(); err != nil {
 			s.logger.Fatal("error restore metrics from file: ", err)
 		}
 	}
 
+	// Запуск горутины сохранения метрик с интервалом
 	go func() {
 		for {
 			time.Sleep(time.Duration(s.storeInterval) * time.Second)
@@ -60,7 +67,7 @@ func (s *Server) Start(address string) {
 	router := chi.NewRouter()
 
 	// Назначение соответствий хендлеров
-	s.addHandlers(router, api.NewHandler(s.storage))
+	s.addHandlers(router, api.NewHandler(s.services.storageCommands))
 
 	// Старт сервера
 	s.logger.Infof("Starting server on %v", address)
@@ -77,6 +84,11 @@ func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
 		r.Post("/{type}/{name}/{value}", s.withGZipEncode(s.withLogger(handler.UpdatePost)))
 	})
 
+	// /updates
+	router.Route("/updates", func(r chi.Router) {
+		r.Post("/", s.withGZipEncode(s.withLogger(handler.UpdatesPostJSON)))
+	})
+
 	// /value
 	router.Route("/value", func(r chi.Router) {
 		r.Post("/", s.withGZipEncode(s.withLogger(handler.ValueGetJSON)))
@@ -85,17 +97,20 @@ func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
 
 	// index
 	router.Get("/", s.withGZipEncode(s.withLogger(handler.IndexGet)))
+
+	// /ping
+	router.Get("/ping", s.withLogger(handler.PingGet))
 }
 
-// middleware для эндпоинтов для логирования
+// middleware эндпоинтов для логирования
 func (s *Server) withLogger(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
 		// Создание обертки для ResponseWriter
-		lw := &api.LoggingResponseWriter{
+		lw := &LoggingResponseWriter{
 			ResponseWriter: w,
-			ResponseData: &api.ResponseData{
+			ResponseData: &ResponseData{
 				Status: 0,
 				Size:   0,
 			},
@@ -104,12 +119,12 @@ func (s *Server) withLogger(next http.HandlerFunc) http.HandlerFunc {
 		// Переход к следующему хендлеру
 		next(lw, r)
 
-		s.logger.Infof("Incoming HTTP Request: URI: %s, Method: %v, Headers: %v, Time Duration: %v", r.RequestURI, r.Method, r.Header, time.Since(start))
+		s.logger.Infof("Incoming HTTP Request: URI: %s, Method: %v, Time Duration: %v", r.RequestURI, r.Method, time.Since(start))
 		s.logger.Infof("Outgoing HTTP Response: Status Code: %v, Content Length:%v", lw.ResponseData.Status, lw.ResponseData.Size)
 	}
 }
 
-// middleware для компрессии
+// middleware эндпоинтов для компрессии
 func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Accept") != "application/json" && r.Header.Get("Accept") != "text/html" {
@@ -120,7 +135,7 @@ func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 
 		// Проверка хедеров
 		headers := strings.Split(r.Header.Get("Accept-Encoding"), ",")
-		if !api.ArrayContains(headers, "gzip") {
+		if !ArrayContains(headers, "gzip") {
 			next(w, r)
 			return
 		}
@@ -136,14 +151,14 @@ func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 
 		w.Header().Set("Content-Encoding", "gzip")
 
-		next(api.GzipWriter{ResponseWriter: w, Writer: gz}, r)
+		next(GzipWriter{ResponseWriter: w, Writer: gz}, r)
 	}
 }
 
 // Метод записи метрик в файл
 func (s *Server) storeMetrics() error {
 	// Чтение всех метрик из хранилища
-	metrics, err := s.storage.ReadAll()
+	metrics, err := s.services.storageCommands.ReadAll()
 	if err != nil {
 		return fmt.Errorf("read metrics: %w", err)
 	}
@@ -154,6 +169,7 @@ func (s *Server) storeMetrics() error {
 		return nil
 	}
 
+	// Сериализация метрик
 	data := []byte{}
 	metricsLength := len(metrics) - 1
 	for i, v := range metrics {
@@ -170,11 +186,13 @@ func (s *Server) storeMetrics() error {
 
 	s.logger.Debugf("data:%s:endData", string(data))
 
+	// Создание/обновление файла
 	storageFile, err := os.Create(s.fileStoragePath)
 	if err != nil {
 		return fmt.Errorf("error create file: %w", err)
 	}
 
+	// Запись даты в файл
 	if _, err = storageFile.Write(data); err != nil {
 		return fmt.Errorf("write metrics: %w", err)
 	}
@@ -198,29 +216,13 @@ func (s *Server) initMetricsFromFile() error {
 	// Разбивка по линиям файла
 	lines := strings.Split(string(fileData), "\n")
 	for _, line := range lines {
-		//Десериализация в буфер
-		bufData := map[string]any{}
-		if err = json.Unmarshal([]byte(line), &bufData); err != nil {
+		storageData := &storage.Data{}
+		if err = json.Unmarshal([]byte(line), storageData); err != nil {
 			return fmt.Errorf("unmarshal metrics: %w", err)
 		}
 
-		// Конструктор хранилища даты
-		storageData := &storage.Data{}
-		storageData.Type = bufData["type"].(string)
-		storageData.Name = bufData["name"].(string)
-		dataID := storageData.UniqueID()
-
-		// Форматирование типа значения
-		if storageData.Type == "counter" {
-			value := int64(bufData["value"].(float64))
-			storageData.Value = &value
-		} else {
-			value := bufData["value"].(float64)
-			storageData.Value = &value
-		}
-
 		// Забись в хранилище
-		if err = s.storage.Update(dataID, storageData); err != nil {
+		if err = s.services.storageCommands.Update(storageData); err != nil {
 			return fmt.Errorf("update metrics: %w", err)
 		}
 	}
