@@ -70,6 +70,7 @@ func main() {
 		config.FileStorage.StoreInterval,
 		config.FileStorage.FileStoragePath,
 		config.FileStorage.Restore,
+		config.Key,
 	)
 
 	// Запуск сервера

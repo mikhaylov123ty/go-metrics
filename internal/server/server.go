@@ -1,9 +1,13 @@
 package server
 
 import (
+	"bytes"
 	"compress/gzip"
+	"crypto/hmac"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -24,6 +28,7 @@ type Server struct {
 	storeInterval   int
 	fileStoragePath string
 	restore         bool
+	key             string
 }
 
 type services struct {
@@ -31,7 +36,7 @@ type services struct {
 }
 
 // Конструктор инстанса сервера
-func New(storageCommands *api.StorageCommands, logger *logrus.Logger, storeInterval int, fileStoragePath string, restore bool) *Server {
+func New(storageCommands *api.StorageCommands, logger *logrus.Logger, storeInterval int, fileStoragePath string, restore bool, key string) *Server {
 	return &Server{
 		services: services{
 			storageCommands: storageCommands},
@@ -39,12 +44,12 @@ func New(storageCommands *api.StorageCommands, logger *logrus.Logger, storeInter
 		storeInterval:   storeInterval,
 		fileStoragePath: fileStoragePath,
 		restore:         restore,
+		key:             key,
 	}
 }
 
 // Метод запуска сервера
 func (s *Server) Start(address string) {
-
 	// Инициализация даты из файла
 	if s.restore {
 		if err := s.initMetricsFromFile(); err != nil {
@@ -80,23 +85,23 @@ func (s *Server) Start(address string) {
 func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
 	// /update
 	router.Route("/update", func(r chi.Router) {
-		r.Post("/", s.withGZipEncode(s.withLogger(handler.UpdatePostJSON)))
-		r.Post("/{type}/{name}/{value}", s.withGZipEncode(s.withLogger(handler.UpdatePost)))
+		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(handler.UpdatePostJSON))))
+		r.Post("/{type}/{name}/{value}", s.withGZipEncode(s.withLogger(s.withHash(handler.UpdatePost))))
 	})
 
 	// /updates
 	router.Route("/updates", func(r chi.Router) {
-		r.Post("/", s.withGZipEncode(s.withLogger(handler.UpdatesPostJSON)))
+		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(handler.UpdatesPostJSON))))
 	})
 
 	// /value
 	router.Route("/value", func(r chi.Router) {
-		r.Post("/", s.withGZipEncode(s.withLogger(handler.ValueGetJSON)))
-		r.Get("/{type}/{name}", s.withGZipEncode(s.withLogger(handler.ValueGet)))
+		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(handler.ValueGetJSON))))
+		r.Get("/{type}/{name}", s.withGZipEncode(s.withLogger(s.withHash(handler.ValueGet))))
 	})
 
 	// index
-	router.Get("/", s.withGZipEncode(s.withLogger(handler.IndexGet)))
+	router.Get("/", s.withGZipEncode(s.withLogger(s.withHash(handler.IndexGet))))
 
 	// /ping
 	router.Get("/ping", s.withLogger(handler.PingGet))
@@ -152,6 +157,44 @@ func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 		w.Header().Set("Content-Encoding", "gzip")
 
 		next(GzipWriter{ResponseWriter: w, Writer: gz}, r)
+	}
+}
+
+func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		requestHeader, err := hex.DecodeString(r.Header.Get("HashSHA256"))
+		if err != nil {
+			s.logger.Error("error decoding hash header:", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		hashWriter := &HashResponseWriter{
+			ResponseWriter: w,
+		}
+
+		if len(s.key) > 0 && len(requestHeader) > 0 {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				s.logger.Error(err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			r.Body.Close()
+			r.Body = io.NopCloser(bytes.NewBuffer(body))
+
+			hash := getHash(s.key, body)
+			if !hmac.Equal(hash, requestHeader) {
+				s.logger.Error("invalid hash")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			hashWriter.key = s.key
+		}
+
+		next(hashWriter, r)
 	}
 }
 
