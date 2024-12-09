@@ -7,6 +7,19 @@ import (
 	"testing"
 )
 
+var commands *StorageCommands
+
+func init() {
+	newMemStorage := memory.NewMemoryStorage()
+	commands = &StorageCommands{
+		read:        newMemStorage,
+		readAll:     newMemStorage,
+		update:      newMemStorage,
+		updateBatch: newMemStorage,
+	}
+
+}
+
 func TestHandler_Update(t *testing.T) {
 	type want struct {
 		code        int
@@ -69,14 +82,7 @@ func TestHandler_Update(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			newMemStorage := memory.NewMemoryStorage()
-			commands := &StorageCommands{
-				read:        newMemStorage,
-				readAll:     newMemStorage,
-				update:      newMemStorage,
-				updateBatch: newMemStorage,
-			}
-			handler := NewHandler(commands)
+
 			request := httptest.NewRequest(tt.args.method, tt.args.url, nil)
 			request.Header.Add("Content-Type", tt.args.contentType)
 			request.SetPathValue("type", tt.args.metricType)
@@ -85,6 +91,7 @@ func TestHandler_Update(t *testing.T) {
 
 			w := httptest.NewRecorder()
 
+			handler := NewHandler(commands)
 			handler.UpdatePost(w, request)
 
 			res := w.Result()

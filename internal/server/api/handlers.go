@@ -73,29 +73,30 @@ func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	// Чтение тела запроса
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		log.Println("failed read request body", err)
+		log.Println("UpdatePostJSON: failed read request body", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	defer req.Body.Close()
 
 	// Десериализация тела запроса
 	storageData := storage.Data{}
 	if err = json.Unmarshal(body, &storageData); err != nil {
-		log.Println("failed unmarshall request body", err)
+		log.Println("UpdatePostJSON: failed unmarshall request body", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	// Проверка невалидных значений
 	if err = storageData.CheckData(); err != nil {
-		log.Println("failed check request body", err)
+		log.Println("UpdatePostJSON: failed check request body", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	// Обновление или сохранение новой записи в хранилище
 	if err = h.storageCommands.Update(&storageData); err != nil {
-		log.Println("update handler error:", err)
+		log.Println("UpdatePostJSON: update handler error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -117,22 +118,23 @@ func (h *Handler) UpdatesPostJSON(w http.ResponseWriter, req *http.Request) {
 	// Чтение тела запроса
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		log.Println("failed read request body", err)
+		log.Println("UpdatesPostJSON: failed read request body", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	defer req.Body.Close()
 
 	// Десериализация тела запроса
 	storageData := []*storage.Data{}
 	if err = json.Unmarshal(body, &storageData); err != nil {
-		log.Println("failed unmarshall request body", err)
+		log.Println("UpdatesPostJSON: failed unmarshall request body", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	// Проверка пустых батчей
 	if len(storageData) == 0 {
-		log.Println("empty batch data")
+		log.Println("UpdatesPostJSON: empty batch data")
 		w.WriteHeader(http.StatusBadRequest)
 	}
 
@@ -140,7 +142,7 @@ func (h *Handler) UpdatesPostJSON(w http.ResponseWriter, req *http.Request) {
 	for _, data := range storageData {
 		// Проверка невалидных значений
 		if err = data.CheckData(); err != nil {
-			log.Println("failed check request body", err)
+			log.Println("UpdatesPostJSON: failed check request body", err)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -148,7 +150,7 @@ func (h *Handler) UpdatesPostJSON(w http.ResponseWriter, req *http.Request) {
 
 	// Обновление или сохранение новой записи в хранилище
 	if err = h.storageCommands.UpdateBatch(storageData); err != nil {
-		log.Println("update handler error:", err)
+		log.Println("UpdatesPostJSON: update handler error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -174,7 +176,7 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 		delta, err := strconv.ParseInt(req.PathValue("value"), 10, 64)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			log.Println("invalid new data:", err)
+			log.Println("UpdatePost: invalid new data:", err)
 			return
 		}
 		storageData.Delta = &delta
@@ -184,13 +186,13 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 		value, err := strconv.ParseFloat(req.PathValue("value"), 64)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			log.Println("invalid new data:", err)
+			log.Println("UpdatePost: invalid new data:", err)
 			return
 		}
 		storageData.Value = &value
 
 	default:
-		log.Println("invalid data type:", storageData.Type)
+		log.Println("UpdatePost: invalid data type:", storageData.Type)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -203,7 +205,7 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 
 	// Обновление или сохранение новой записи в хранилище
 	if err = h.storageCommands.Update(storageData); err != nil {
-		log.Println("update handler error:", err)
+		log.Println("UpdatePost: update handler error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -223,15 +225,16 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	// Чтение тела
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		log.Println("failed read request body", err)
+		log.Println("ValueGetJSON: failed read request body", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	defer req.Body.Close()
 
 	// Десериализация тела
 	storageData := storage.Data{}
 	if err = json.Unmarshal(body, &storageData); err != nil {
-		log.Println("failed unmarshall request body", err)
+		log.Println("ValueGetJSON: failed unmarshall request body", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -239,7 +242,7 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	// Получение данных записи
 	metric, err := h.storageCommands.Read(storageData.Name)
 	if err != nil {
-		log.Println("get handler: read repo:", err)
+		log.Println("ValueGetJSON: get handler: read repo:", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -253,7 +256,7 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	// Сериализация данных
 	response, err := json.Marshal(metric)
 	if err != nil {
-		log.Println("get handler: marshal data:", err)
+		log.Println("ValueGetJSON: get handler: marshal data:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -270,7 +273,7 @@ func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 	var err error
 
 	if req.PathValue("name") == "" {
-		log.Println("value get: empty path value")
+		log.Println("ValueGet: empty path value")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -278,14 +281,14 @@ func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 	// Получение данных записи
 	data, err := h.storageCommands.Read(req.PathValue("name"))
 	if err != nil {
-		log.Println("get handler: read repo:", err)
+		log.Println("ValueGet: read repo:", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	// Проверка пустой даты
 	if data == nil {
-		log.Println("get handler: read repo: not found")
+		log.Println("ValueGet: read repo: not found")
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -295,14 +298,14 @@ func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 	if data.Type == "counter" {
 		response, err = json.Marshal(data.Delta)
 		if err != nil {
-			log.Println("get handler: marshal data:", err)
+			log.Println("ValueGet:marshal data:", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 	} else {
 		response, err = json.Marshal(data.Value)
 		if err != nil {
-			log.Println("get handler: marshal data:", err)
+			log.Println("ValueGet: marshal data:", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -320,12 +323,12 @@ func (h *Handler) IndexGet(w http.ResponseWriter, req *http.Request) {
 	// Получение всех записей
 	data, err := h.storageCommands.ReadAll()
 	if err != nil {
-		log.Println("get handler error:", err)
+		log.Println("IndexGet: get handler error:", err)
 	}
 
 	// Проверка пустой даты
 	if len(data) == 0 {
-		log.Println("get handler error: not found")
+		log.Println("IndexGet: get handler error: not found")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -333,7 +336,7 @@ func (h *Handler) IndexGet(w http.ResponseWriter, req *http.Request) {
 	// Сериализация данных
 	resp, err := json.Marshal(data)
 	if err != nil {
-		log.Println("get handler error:", err)
+		log.Println("IndexGet: get handler error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

@@ -14,7 +14,12 @@ func main() {
 	}
 
 	// Инициализация инстанса агента
-	agentInstance := client.NewAgent(config.String(), config.PollInterval, config.ReportInterval)
+	agentInstance := client.NewAgent(
+		config.String(),
+		config.PollInterval,
+		config.ReportInterval,
+		config.Key,
+	)
 
 	// Запуск агента
 	agentInstance.Run()

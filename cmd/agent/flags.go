@@ -14,6 +14,7 @@ type AgentConfig struct {
 	Port           string
 	ReportInterval int
 	PollInterval   int
+	Key            string
 }
 
 // Конструктор конфигурации агента
@@ -36,8 +37,11 @@ func NewConfig() (*AgentConfig, error) {
 func (a *AgentConfig) parseFlags() {
 	flag.StringVar(&a.Host, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
 	flag.StringVar(&a.Port, "port", "8080", "Port on which to listen. Example: \"8081\"")
+
 	flag.IntVar(&a.ReportInterval, "r", 10, "Metrics send interval")
 	flag.IntVar(&a.PollInterval, "p", 2, "Metrics update interval")
+
+	flag.StringVar(&a.Key, "k", "", "Key")
 
 	_ = flag.Value(a)
 	flag.Var(a, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
@@ -64,6 +68,10 @@ func (a *AgentConfig) parseEnv() error {
 		if a.PollInterval, err = strconv.Atoi(pollInterval); err != nil {
 			return fmt.Errorf("error parsing POLL_INTERVAL: %w", err)
 		}
+	}
+
+	if key := os.Getenv("KEY"); key != "" {
+		a.Key = key
 	}
 
 	return nil

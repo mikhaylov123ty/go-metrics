@@ -1,6 +1,9 @@
 package client
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,6 +17,12 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
+// Алиасы ручек
+const (
+	singleHandlerPath = "/update"
+	batchHandlerPath  = "/updates"
+)
+
 // Структура агента
 type Agent struct {
 	baseURL        string
@@ -22,16 +31,18 @@ type Agent struct {
 	reportInterval int
 	metrics        []*storage.Data
 	statsBuf       statsBuf
+	key            string
 }
 
 // Конструктор агента
-func NewAgent(baseURL string, pollInterval int, reportInterval int) *Agent {
+func NewAgent(baseURL string, pollInterval int, reportInterval int, key string) *Agent {
 	return &Agent{
 		baseURL:        "http://" + baseURL,
 		client:         resty.New(),
 		pollInterval:   pollInterval,
 		reportInterval: reportInterval,
 		statsBuf:       collectMetrics(&Stats{}),
+		key:            key,
 	}
 }
 
@@ -48,7 +59,7 @@ func (a *Agent) Run() {
 		}
 	}()
 
-	// Запуск бесконечного цикла отправки метрики с интервалом reportInterval
+	// Запуск бесконечного цикла параллельной отправки метрики с интервалом reportInterval
 	for {
 		time.Sleep(time.Duration(a.reportInterval) * time.Second)
 
@@ -118,39 +129,28 @@ func collectMetrics(statsBuf *Stats) statsBuf {
 	}
 }
 
-// Метод отправки запроса "POST /update"
-func (a *Agent) postUpdate(metric *storage.Data) (*resty.Response, error) {
-	URL := a.baseURL + "/update"
+// Обертка для запросов с подписью
+func (a *Agent) withSign(request *resty.Request) *resty.Request {
+	if a.key != "" {
+		h := hmac.New(sha256.New, []byte(a.key))
+		h.Write([]byte(fmt.Sprintf("%s", request.Body)))
+		hash := hex.EncodeToString(h.Sum(nil))
 
-	// Формирования и выполнение запроса
-	resp, err := a.client.R().
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Accept-Encoding", "gzip").
-		SetBody(metric).
-		Post(URL)
-	if err != nil {
-		return nil, fmt.Errorf("post update error: %w", err)
+		request.SetHeader("HashSHA256", hash)
 	}
 
-	return resp, nil
+	return request
 }
 
-// Метод отправки запроса "POST /updates"
-func (a *Agent) postUpdates() (*resty.Response, error) {
-	URL := a.baseURL + "/updates"
-
-	// Сериализация метрик
-	body, err := json.Marshal(a.metrics)
-	if err != nil {
-		return nil, fmt.Errorf("post updates marshal error: %w", err)
-	}
+// Метод отправки запроса
+func (a *Agent) postUpdates(handler string, data *[]byte) (*resty.Response, error) {
+	URL := a.baseURL + handler
 
 	// Формирование и выполнение запроса
-	resp, err := a.client.R().
+	resp, err := a.withSign(a.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Accept-Encoding", "gzip").
-		SetBody(body).
-		Post(URL)
+		SetBody(*data)).Post(URL)
 	if err != nil {
 		return nil, fmt.Errorf("post updates error: %w", err)
 	}
@@ -160,6 +160,10 @@ func (a *Agent) postUpdates() (*resty.Response, error) {
 
 // Метод отправки метрик
 func (a *Agent) sendMetrics() {
+	if len(a.metrics) == 0 {
+		return
+	}
+
 	wg := sync.WaitGroup{}
 	wg.Add(len(a.metrics))
 
@@ -167,12 +171,21 @@ func (a *Agent) sendMetrics() {
 	for _, metric := range a.metrics {
 		go func(metric *storage.Data) {
 			defer wg.Done()
-			resp, err := metricFunc(a.postUpdate).withRetry(metric)
+
+			// Сериализация метрики
+			data, err := json.Marshal(metric)
 			if err != nil {
-				log.Printf("%s, metric: %v", err.Error(), metric)
 				return
 			}
-			log.Printf("post update: metric: %v, URI: %s, Status Code: %d", metric, resp.Request.URL, resp.StatusCode())
+
+			// Передача метрики в функцию отправки с опцией повторения
+			// при ошибках с подключением
+			resp, err := sendFunc(a.postUpdates).withRetry(singleHandlerPath, &data)
+			if err != nil {
+				log.Printf("%s, metric: %v\n", err.Error(), metric)
+				return
+			}
+			log.Printf("post update: metric: %v, URI: %s, Status Code: %d\n", metric, resp.Request.URL, resp.StatusCode())
 		}(metric)
 	}
 
@@ -181,7 +194,19 @@ func (a *Agent) sendMetrics() {
 
 // Метод отправки метрик батчами
 func (a *Agent) sendMetricsBatch() error {
-	resp, err := batchFunc(a.postUpdates).withRetry()
+	if len(a.metrics) == 0 {
+		return nil
+	}
+
+	// Сериализация метрик
+	data, err := json.Marshal(a.metrics)
+	if err != nil {
+		return err
+	}
+
+	// Передача метрик в функцию отправки с опцией повторения
+	// при ошибках с подключением
+	resp, err := sendFunc(a.postUpdates).withRetry(batchHandlerPath, &data)
 	if err != nil {
 		return err
 	}
