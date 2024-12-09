@@ -20,6 +20,7 @@ type ResponseData struct {
 	Size   int
 }
 
+// Структура обертки для хэширования
 type HashResponseWriter struct {
 	http.ResponseWriter
 	key string
@@ -31,6 +32,7 @@ type GzipWriter struct {
 	Writer io.Writer
 }
 
+// Обертка метода Write для хеширования ответа и записи в хедер
 func (w *HashResponseWriter) Write(b []byte) (int, error) {
 	if w.key != "" {
 		hash := getHash(w.key, b)
@@ -71,6 +73,7 @@ func ArrayContains(arr []string, str string) bool {
 	return false
 }
 
+// Метод создания хэша из сообщения и подписи ключом
 func getHash(key string, msg []byte) []byte {
 	h := hmac.New(sha256.New, []byte(key))
 	h.Write(msg)

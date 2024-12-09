@@ -42,7 +42,7 @@ func (m *MemoryStorage) Update(query *storage.Data) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if metric, ok := m.metrics[query.Name]; ok && query.Type == "counter" {
+	if metric, ok := m.metrics[query.Name]; ok && query.Type == "counter" && metric.Type == query.Type {
 		*query.Delta += *metric.Delta
 	}
 
@@ -57,7 +57,7 @@ func (m *MemoryStorage) UpdateBatch(queries []*storage.Data) error {
 	defer m.mu.Unlock()
 
 	for _, query := range queries {
-		if metric, ok := m.metrics[query.Name]; ok && query.Type == "counter" {
+		if metric, ok := m.metrics[query.Name]; ok && query.Type == "counter" && metric.Type == query.Type {
 			*query.Delta += *metric.Delta
 		}
 		m.metrics[query.Name] = query

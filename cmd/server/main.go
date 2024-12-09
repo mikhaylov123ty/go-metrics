@@ -40,7 +40,6 @@ func main() {
 			psqlStorage,
 			psqlStorage,
 		)
-
 		log.Println("Storage: postgres")
 
 	default:
@@ -53,7 +52,6 @@ func main() {
 			memStorage,
 			nil,
 		)
-
 		log.Println("Storage: memory")
 	}
 

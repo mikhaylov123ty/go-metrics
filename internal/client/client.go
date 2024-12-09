@@ -17,6 +17,7 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
+// Алиасы ручек
 const (
 	singleHandlerPath = "/update"
 	batchHandlerPath  = "/updates"
@@ -58,7 +59,7 @@ func (a *Agent) Run() {
 		}
 	}()
 
-	// Запуск бесконечного цикла отправки метрики с интервалом reportInterval
+	// Запуск бесконечного цикла параллельной отправки метрики с интервалом reportInterval
 	for {
 		time.Sleep(time.Duration(a.reportInterval) * time.Second)
 
@@ -128,7 +129,8 @@ func collectMetrics(statsBuf *Stats) statsBuf {
 	}
 }
 
-func (a *Agent) withHash(request *resty.Request) *resty.Request {
+// Обертка для запросов с подписью
+func (a *Agent) withSign(request *resty.Request) *resty.Request {
 	if a.key != "" {
 		h := hmac.New(sha256.New, []byte(a.key))
 		h.Write([]byte(fmt.Sprintf("%s", request.Body)))
@@ -145,7 +147,7 @@ func (a *Agent) postUpdates(handler string, data *[]byte) (*resty.Response, erro
 	URL := a.baseURL + handler
 
 	// Формирование и выполнение запроса
-	resp, err := a.withHash(a.client.R().
+	resp, err := a.withSign(a.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Accept-Encoding", "gzip").
 		SetBody(*data)).Post(URL)
@@ -170,11 +172,14 @@ func (a *Agent) sendMetrics() {
 		go func(metric *storage.Data) {
 			defer wg.Done()
 
+			// Сериализация метрики
 			data, err := json.Marshal(metric)
 			if err != nil {
 				return
 			}
 
+			// Передача метрики в функцию отправки с опцией повторения
+			// при ошибках с подключением
 			resp, err := sendFunc(a.postUpdates).withRetry(singleHandlerPath, &data)
 			if err != nil {
 				log.Printf("%s, metric: %v\n", err.Error(), metric)
@@ -193,11 +198,14 @@ func (a *Agent) sendMetricsBatch() error {
 		return nil
 	}
 
+	// Сериализация метрик
 	data, err := json.Marshal(a.metrics)
 	if err != nil {
 		return err
 	}
 
+	// Передача метрик в функцию отправки с опцией повторения
+	// при ошибках с подключением
 	resp, err := sendFunc(a.postUpdates).withRetry(batchHandlerPath, &data)
 	if err != nil {
 		return err

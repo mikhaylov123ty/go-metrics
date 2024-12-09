@@ -160,9 +160,11 @@ func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// middleware для эндпоинтов для хеширования и подписи
 func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
+		//Декодирование хедера
 		requestHeader, err := hex.DecodeString(r.Header.Get("HashSHA256"))
 		if err != nil {
 			s.logger.Error("error decoding hash header:", err)
@@ -170,11 +172,15 @@ func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		// Создание обертки для ResponseWriter
 		hashWriter := &HashResponseWriter{
 			ResponseWriter: w,
 		}
 
+		// Проверка наличия ключа из флага и в запросе
 		if len(s.key) > 0 && len(requestHeader) > 0 {
+			// Чтение тела запроса, закрытие и копирование
+			// для передачи далее по пайплайну
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
 				s.logger.Error(err)
@@ -184,6 +190,7 @@ func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 			r.Body.Close()
 			r.Body = io.NopCloser(bytes.NewBuffer(body))
 
+			// Вычисление и валидация хэша
 			hash := getHash(s.key, body)
 			if !hmac.Equal(hash, requestHeader) {
 				s.logger.Error("invalid hash")
