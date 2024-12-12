@@ -6,12 +6,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/mem"
 	"log"
 	"math/rand/v2"
-	"runtime"
+	"strconv"
 	"sync"
+
+	"runtime"
 	"time"
 
+	"metrics/internal/client/config"
 	"metrics/internal/storage"
 
 	"github.com/go-resty/resty/v2"
@@ -32,17 +37,19 @@ type Agent struct {
 	metrics        []*storage.Data
 	statsBuf       statsBuf
 	key            string
+	rateLimit      int
 }
 
 // Конструктор агента
-func NewAgent(baseURL string, pollInterval int, reportInterval int, key string) *Agent {
+func NewAgent(cfg *config.AgentConfig) *Agent {
 	return &Agent{
-		baseURL:        "http://" + baseURL,
+		baseURL:        "http://" + cfg.String(),
 		client:         resty.New(),
-		pollInterval:   pollInterval,
-		reportInterval: reportInterval,
-		statsBuf:       collectMetrics(&Stats{}),
-		key:            key,
+		pollInterval:   cfg.PollInterval,
+		reportInterval: cfg.ReportInterval,
+		statsBuf:       collectMetrics(&Stats{mu: sync.RWMutex{}, Data: make(map[string]interface{})}),
+		key:            cfg.Key,
+		rateLimit:      cfg.RateLimit,
 	}
 }
 
@@ -61,23 +68,50 @@ func (a *Agent) Run() {
 
 	// Запуск бесконечного цикла параллельной отправки метрики с интервалом reportInterval
 	for {
-		time.Sleep(time.Duration(a.reportInterval) * time.Second)
 
+		time.Sleep(time.Duration(a.reportInterval) * time.Second)
 		wg.Add(2)
+		//here?
+		jobs := make(chan *[]byte)
+		res := make(chan *restyResponse)
+
+		//TODO here create jobs channel?
+		for range a.rateLimit {
+			go a.postWorker(singleHandlerPath, jobs, res)
+		}
 
 		go func() {
-			a.sendMetrics()
+			fmt.Println("STARTING SEND METRICS")
+			if err := a.sendMetrics(jobs); err != nil {
+				log.Println("send metric err:", err)
+			}
 			wg.Done()
+			fmt.Println("ENDING SEND METRICS")
 		}()
 
 		go func() {
-			if err := a.sendMetricsBatch(); err != nil {
+			fmt.Println("STARTING SEND METRICS BATCH")
+			if err := a.sendMetricsBatch(jobs); err != nil {
 				log.Println("Send metrics batch err:", err)
 			}
 			wg.Done()
+			fmt.Println("Ending SEND METRICS BATCH")
 		}()
 
-		wg.Wait()
+		go func() {
+			wg.Wait()
+			fmt.Println("WAIT DONE, CLOSE JOBS")
+			close(jobs)
+		}()
+
+		for range 40 {
+			fmt.Println("reading from res")
+			fmt.Println(<-res)
+
+		}
+
+		fmt.Println("END SEND CYCLE")
+
 	}
 }
 
@@ -85,48 +119,186 @@ func (a *Agent) Run() {
 func collectMetrics(statsBuf *Stats) statsBuf {
 	counter := 1
 	return func() *Stats {
-		// Чтение метрик
-		rt := &runtime.MemStats{}
-		runtime.ReadMemStats(rt)
+		wg := &sync.WaitGroup{}
+		wg.Add(2)
 
-		// Присвоение полей для каждой метрики
-		(*statsBuf)["Alloc"] = float64(rt.Alloc)
-		(*statsBuf)["BuckHashSys"] = float64(rt.BuckHashSys)
-		(*statsBuf)["Frees"] = float64(rt.Frees)
-		(*statsBuf)["GCCPUFraction"] = float64(rt.GCCPUFraction)
-		(*statsBuf)["GCSys"] = float64(rt.GCSys)
-		(*statsBuf)["HeapAlloc"] = float64(rt.HeapAlloc)
-		(*statsBuf)["HeapIdle"] = float64(rt.HeapIdle)
-		(*statsBuf)["HeapInuse"] = float64(rt.HeapInuse)
-		(*statsBuf)["HeapObjects"] = float64(rt.HeapObjects)
-		(*statsBuf)["HeapReleased"] = float64(rt.HeapReleased)
-		(*statsBuf)["HeapSys"] = float64(rt.HeapSys)
-		(*statsBuf)["LastGC"] = float64(rt.LastGC)
-		(*statsBuf)["Lookups"] = float64(rt.Lookups)
-		(*statsBuf)["MCacheInuse"] = float64(rt.MCacheInuse)
-		(*statsBuf)["MCacheSys"] = float64(rt.MCacheSys)
-		(*statsBuf)["MSpanInuse"] = float64(rt.MSpanInuse)
-		(*statsBuf)["MSpanSys"] = float64(rt.MSpanSys)
-		(*statsBuf)["Mallocs"] = float64(rt.Mallocs)
-		(*statsBuf)["NextGC"] = float64(rt.NextGC)
-		(*statsBuf)["NumForcedGC"] = float64(rt.NumForcedGC)
-		(*statsBuf)["NumGC"] = float64(rt.NumGC)
-		(*statsBuf)["OtherSys"] = float64(rt.OtherSys)
-		(*statsBuf)["PauseTotalNs"] = float64(rt.PauseTotalNs)
-		(*statsBuf)["StackInuse"] = float64(rt.StackInuse)
-		(*statsBuf)["StackSys"] = float64(rt.StackSys)
-		(*statsBuf)["Sys"] = float64(rt.Sys)
-		(*statsBuf)["TotalAlloc"] = float64(rt.TotalAlloc)
+		// Cборка основных метрик
+		go func() {
+			fmt.Println("STARTING GOROUTINE BASE METRIC")
+			defer wg.Done()
+			// Чтение метрик
+			rt := &runtime.MemStats{}
+			runtime.ReadMemStats(rt)
 
-		// Генерация произвольного значения
-		(*statsBuf)["RandomValue"] = rand.Float64()
+			statsBuf.mu.Lock()
 
-		// Увеличение счетчика
-		(*statsBuf)["PollCount"] = int64(counter)
-		counter++
+			// Присвоение полей для каждой метрики
+			(statsBuf.Data)["Alloc"] = float64(rt.Alloc)
+			(statsBuf.Data)["BuckHashSys"] = float64(rt.BuckHashSys)
+			(statsBuf.Data)["Frees"] = float64(rt.Frees)
+			(statsBuf.Data)["GCCPUFraction"] = float64(rt.GCCPUFraction)
+			(statsBuf.Data)["GCSys"] = float64(rt.GCSys)
+			(statsBuf.Data)["HeapAlloc"] = float64(rt.HeapAlloc)
+			(statsBuf.Data)["HeapIdle"] = float64(rt.HeapIdle)
+			(statsBuf.Data)["HeapInuse"] = float64(rt.HeapInuse)
+			(statsBuf.Data)["HeapObjects"] = float64(rt.HeapObjects)
+			(statsBuf.Data)["HeapReleased"] = float64(rt.HeapReleased)
+			(statsBuf.Data)["HeapSys"] = float64(rt.HeapSys)
+			(statsBuf.Data)["LastGC"] = float64(rt.LastGC)
+			(statsBuf.Data)["Lookups"] = float64(rt.Lookups)
+			(statsBuf.Data)["MCacheInuse"] = float64(rt.MCacheInuse)
+			(statsBuf.Data)["MCacheSys"] = float64(rt.MCacheSys)
+			(statsBuf.Data)["MSpanInuse"] = float64(rt.MSpanInuse)
+			(statsBuf.Data)["MSpanSys"] = float64(rt.MSpanSys)
+			(statsBuf.Data)["Mallocs"] = float64(rt.Mallocs)
+			(statsBuf.Data)["NextGC"] = float64(rt.NextGC)
+			(statsBuf.Data)["NumForcedGC"] = float64(rt.NumForcedGC)
+			(statsBuf.Data)["NumGC"] = float64(rt.NumGC)
+			(statsBuf.Data)["OtherSys"] = float64(rt.OtherSys)
+			(statsBuf.Data)["PauseTotalNs"] = float64(rt.PauseTotalNs)
+			(statsBuf.Data)["StackInuse"] = float64(rt.StackInuse)
+			(statsBuf.Data)["StackSys"] = float64(rt.StackSys)
+			(statsBuf.Data)["Sys"] = float64(rt.Sys)
+			(statsBuf.Data)["TotalAlloc"] = float64(rt.TotalAlloc)
 
+			// Генерация произвольного значения
+			(statsBuf.Data)["RandomValue"] = rand.Float64()
+
+			// Увеличение счетчика
+			(statsBuf.Data)["PollCount"] = int64(counter)
+
+			statsBuf.mu.Unlock()
+
+			counter++
+			fmt.Println("ENDING GOROUTINE BASE METRIC")
+
+		}()
+
+		// Сборка дополнительных метрик
+		go func() {
+			defer wg.Done()
+			fmt.Println("STARTING GOROUTINE ADVANCED METRIC")
+
+			// Сбор статистики памяти
+			vmStats, err := mem.VirtualMemory()
+			if err != nil {
+				log.Println("collect metrics error: Mem.VirtualMemory err:", err)
+			}
+
+			// Сбор статистики ЦПУ
+			cpuStats, err := cpu.Percent(0, true)
+			if err != nil {
+				log.Println("collect metrics error: cpu.Percent err:", err)
+			}
+
+			statsBuf.mu.Lock()
+			// Присвоение полей статистики
+			(statsBuf.Data)["TotalMemory"] = float64(vmStats.Total)
+			(statsBuf.Data)["FreeMemory"] = float64(vmStats.Free)
+
+			// Генератор статистики по каждому ЦПУ
+			for i, cpuStat := range cpuStats {
+				recordString := "CPUutilization" + strconv.Itoa(i+1)
+				(statsBuf.Data)[recordString] = cpuStat
+			}
+
+			statsBuf.mu.Unlock()
+			fmt.Println("END ADVANCED METRIC")
+		}()
+
+		wg.Wait()
+		fmt.Println("RETURN GOROUTINE ALL  METRIC")
 		return statsBuf
 	}
+}
+
+type restyResponse struct {
+	response *resty.Response
+	err      error
+}
+
+// TODO количество иходящих запросов на сервер ограничить лимитом
+// res <- chan?
+// Метод отправки запроса
+func (a *Agent) postWorker(handler string, postChan <-chan *[]byte, res chan<- *restyResponse) {
+	for data := range postChan {
+		fmt.Println("START SENDING DATA FROM WORKER")
+		URL := a.baseURL + handler
+
+		// Формирование и выполнение запроса
+		resp, err := a.withSign(a.client.R().
+			SetHeader("Content-Type", "application/json").
+			SetHeader("Accept-Encoding", "gzip").
+			SetBody(*data)).Post(URL)
+		if err != nil {
+			fmt.Println("ERR SEND DATA FROM WORKER", err.Error())
+		}
+		result := &restyResponse{
+			response: resp,
+			err:      err,
+		}
+
+		res <- result
+	}
+	fmt.Println("ENDING SENDING DATA FROM WORKER")
+}
+
+// todo buf chan <- send metrics
+// workers rate limit for range send metrics will send to post updates
+func (a *Agent) worker(jobs <-chan *[]byte, results chan<- *storage.Data, sf sendFunc, path string) {
+	for j := range jobs {
+		// Передача метрики в функцию отправки с опцией повторения
+		// при ошибках с подключением
+		resp, err := sf.withRetry(path, j)
+		if err != nil {
+			log.Printf("%s, metric: %v\n", err.Error(), j)
+			return
+		}
+		log.Printf("post update: metric: %v, URI: %s, Status Code: %d\n", j, resp.Request.URL, resp.StatusCode())
+	}
+}
+
+// Метод отправки метрик
+func (a *Agent) sendMetrics(jobs chan<- *[]byte) error {
+	if len(a.metrics) == 0 {
+		return nil
+	}
+	fmt.Println("STARTING SEND METRICS in func")
+	//todo make jobs channel
+
+	// Запуск параллельной отправки метрик горутинами
+	for _, metric := range a.metrics {
+		// Сериализация метрики
+		data, err := json.Marshal(metric)
+		if err != nil {
+			fmt.Println("marshal metrics error: %w", err)
+			return fmt.Errorf("marshal metrics error: %w", err)
+		}
+
+		fmt.Println("SENDING DATA TO JOB", string(data))
+		jobs <- &data
+	}
+
+	fmt.Println("ENDING SEND METRICS in func")
+	return nil
+}
+
+// Метод отправки метрик батчами
+func (a *Agent) sendMetricsBatch(jobs chan<- *[]byte) error {
+	if len(a.metrics) == 0 {
+		return nil
+	}
+
+	// Сериализация метрик
+	data, err := json.Marshal(a.metrics)
+	if err != nil {
+		return fmt.Errorf("marshal metrics error: %w", err)
+	}
+
+	fmt.Println("SENDING BATCH DATA TO JOBS", string(data))
+	jobs <- &data
+	fmt.Println("ENDING SEND METRICS BATCH in func")
+	return nil
 }
 
 // Обертка для запросов с подписью
@@ -140,77 +312,4 @@ func (a *Agent) withSign(request *resty.Request) *resty.Request {
 	}
 
 	return request
-}
-
-// Метод отправки запроса
-func (a *Agent) postUpdates(handler string, data *[]byte) (*resty.Response, error) {
-	URL := a.baseURL + handler
-
-	// Формирование и выполнение запроса
-	resp, err := a.withSign(a.client.R().
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Accept-Encoding", "gzip").
-		SetBody(*data)).Post(URL)
-	if err != nil {
-		return nil, fmt.Errorf("post updates error: %w", err)
-	}
-
-	return resp, nil
-}
-
-// Метод отправки метрик
-func (a *Agent) sendMetrics() {
-	if len(a.metrics) == 0 {
-		return
-	}
-
-	wg := sync.WaitGroup{}
-	wg.Add(len(a.metrics))
-
-	// Запуск параллельной отправки метрик горутинами
-	for _, metric := range a.metrics {
-		go func(metric *storage.Data) {
-			defer wg.Done()
-
-			// Сериализация метрики
-			data, err := json.Marshal(metric)
-			if err != nil {
-				return
-			}
-
-			// Передача метрики в функцию отправки с опцией повторения
-			// при ошибках с подключением
-			resp, err := sendFunc(a.postUpdates).withRetry(singleHandlerPath, &data)
-			if err != nil {
-				log.Printf("%s, metric: %v\n", err.Error(), metric)
-				return
-			}
-			log.Printf("post update: metric: %v, URI: %s, Status Code: %d\n", metric, resp.Request.URL, resp.StatusCode())
-		}(metric)
-	}
-
-	wg.Wait()
-}
-
-// Метод отправки метрик батчами
-func (a *Agent) sendMetricsBatch() error {
-	if len(a.metrics) == 0 {
-		return nil
-	}
-
-	// Сериализация метрик
-	data, err := json.Marshal(a.metrics)
-	if err != nil {
-		return err
-	}
-
-	// Передача метрик в функцию отправки с опцией повторения
-	// при ошибках с подключением
-	resp, err := sendFunc(a.postUpdates).withRetry(batchHandlerPath, &data)
-	if err != nil {
-		return err
-	}
-
-	log.Printf("post batch updates: metrics:  URI: %s, Status Code: %d", resp.Request.URL, resp.StatusCode())
-	return nil
 }

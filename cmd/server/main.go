@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"metrics/internal/server/config"
 
 	"metrics/internal/server"
 	"metrics/internal/server/api"
@@ -12,7 +13,7 @@ import (
 
 func main() {
 	// Инициализация конфигурации сервера
-	config, err := NewConfig()
+	cfg, err := config.New()
 	if err != nil {
 		log.Fatal("Build Server Config Error:", err)
 	}
@@ -20,16 +21,16 @@ func main() {
 	// Инициализация инстанса хранения данных
 	var storageCommands *api.StorageCommands
 	switch {
-	case config.DB.Address != "":
+	case cfg.DB.Address != "":
 		psqlStorage, err := psql.NewPSQLDataBase(
-			config.DB.Address,
+			cfg.DB.Address,
 		)
 		if err != nil {
 			log.Fatal("Build Server Storage Connection Error:", err)
 		}
 		defer psqlStorage.Instance.Close()
 
-		if err = psqlStorage.BootStrap(config.DB.Address); err != nil {
+		if err = psqlStorage.BootStrap(cfg.DB.Address); err != nil {
 			log.Fatal("Build Server Storage Bootstrap Error:", err)
 		}
 
@@ -56,7 +57,7 @@ func main() {
 	}
 
 	// Инициализация инстанса логгера
-	loggerInstance, err := logger.New(config.Logger.LogLevel)
+	loggerInstance, err := logger.New(cfg.Logger.LogLevel)
 	if err != nil {
 		log.Fatal("Build Logger Config Error:", err)
 	}
@@ -65,12 +66,9 @@ func main() {
 	serverInstance := server.New(
 		storageCommands,
 		loggerInstance,
-		config.FileStorage.StoreInterval,
-		config.FileStorage.FileStoragePath,
-		config.FileStorage.Restore,
-		config.Key,
+		cfg,
 	)
 
 	// Запуск сервера
-	serverInstance.Start(config.String())
+	serverInstance.Start(cfg.String())
 }

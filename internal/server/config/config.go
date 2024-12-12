@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"flag"
@@ -19,22 +19,25 @@ type ServerConfig struct {
 	Key         string
 }
 
+// Cтруктура конфигруации логгера
 type Logger struct {
 	LogLevel string
 }
 
+// Структура конфигурации хранилища
 type FileStorage struct {
 	StoreInterval   int
 	FileStoragePath string
 	Restore         bool
 }
 
+// Структура конфигруации БД
 type DB struct {
 	Address string
 }
 
 // Конструктор конфигурации сервера
-func NewConfig() (*ServerConfig, error) {
+func New() (*ServerConfig, error) {
 	var err error
 	config := &ServerConfig{Logger: &Logger{}, FileStorage: &FileStorage{}, DB: &DB{}}
 

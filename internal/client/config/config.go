@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"flag"
@@ -15,10 +15,11 @@ type AgentConfig struct {
 	ReportInterval int
 	PollInterval   int
 	Key            string
+	RateLimit      int
 }
 
 // Конструктор конфигурации агента
-func NewConfig() (*AgentConfig, error) {
+func New() (*AgentConfig, error) {
 	var err error
 	config := &AgentConfig{}
 
@@ -35,13 +36,19 @@ func NewConfig() (*AgentConfig, error) {
 
 // Конструктор инструкций флагов агента
 func (a *AgentConfig) parseFlags() {
+	// Базовые флаги
 	flag.StringVar(&a.Host, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
 	flag.StringVar(&a.Port, "port", "8080", "Port on which to listen. Example: \"8081\"")
 
-	flag.IntVar(&a.ReportInterval, "r", 10, "Metrics send interval")
-	flag.IntVar(&a.PollInterval, "p", 2, "Metrics update interval")
+	// Флаги интервалов метрик
+	flag.IntVar(&a.ReportInterval, "r", 10, "Metrics send interval. Defalut: 10")
+	flag.IntVar(&a.PollInterval, "p", 2, "Metrics update interval. Defalut: 2")
 
+	// Флаги подписи и шифрования
 	flag.StringVar(&a.Key, "k", "", "Key")
+
+	// Флаги лимитов запросов
+	flag.IntVar(&a.RateLimit, "l", 5, "Metrics simultaneously send limit. Defalut: 10")
 
 	_ = flag.Value(a)
 	flag.Var(a, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
@@ -72,6 +79,12 @@ func (a *AgentConfig) parseEnv() error {
 
 	if key := os.Getenv("KEY"); key != "" {
 		a.Key = key
+	}
+
+	if rateLimit := os.Getenv("RATE_LIMIT"); rateLimit != "" {
+		if a.RateLimit, err = strconv.Atoi(rateLimit); err != nil {
+			return fmt.Errorf("error parsing RATE_LIMIT: %w", err)
+		}
 	}
 
 	return nil

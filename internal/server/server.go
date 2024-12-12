@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"metrics/internal/server/api"
+	"metrics/internal/server/config"
 	"metrics/internal/storage"
 
 	"github.com/go-chi/chi/v5"
@@ -36,15 +37,15 @@ type services struct {
 }
 
 // Конструктор инстанса сервера
-func New(storageCommands *api.StorageCommands, logger *logrus.Logger, storeInterval int, fileStoragePath string, restore bool, key string) *Server {
+func New(storageCommands *api.StorageCommands, logger *logrus.Logger, cfg *config.ServerConfig) *Server {
 	return &Server{
 		services: services{
 			storageCommands: storageCommands},
 		logger:          logger,
-		storeInterval:   storeInterval,
-		fileStoragePath: fileStoragePath,
-		restore:         restore,
-		key:             key,
+		storeInterval:   cfg.FileStorage.StoreInterval,
+		fileStoragePath: cfg.FileStorage.FileStoragePath,
+		restore:         cfg.FileStorage.Restore,
+		key:             cfg.Key,
 	}
 }
 

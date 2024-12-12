@@ -19,6 +19,8 @@ func NewMemoryStorage() *MemoryStorage {
 
 // Метод получения записи из хранилища по id
 func (m *MemoryStorage) Read(id string) (*storage.Data, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	res, ok := m.metrics[id]
 	if !ok {
 		return nil, nil
@@ -29,6 +31,8 @@ func (m *MemoryStorage) Read(id string) (*storage.Data, error) {
 
 // Метод получения записей из хранилища
 func (m *MemoryStorage) ReadAll() ([]*storage.Data, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	res := make([]*storage.Data, 0)
 	for _, data := range m.metrics {
 		res = append(res, data)

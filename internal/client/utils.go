@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sync"
 	"syscall"
 	"time"
 
@@ -20,9 +21,13 @@ const (
 type (
 	// Вспомогательные типы для методов функций
 	sendFunc func(string, *[]byte) (*resty.Response, error)
-	Stats    map[string]interface{}
 	statsBuf func() *Stats
 )
+
+type Stats struct {
+	mu   sync.RWMutex
+	Data map[string]interface{}
+}
 
 // Метод повтора функции отправки метрик на сервер
 func (sf sendFunc) withRetry(handler string, data *[]byte) (*resty.Response, error) {
@@ -54,7 +59,7 @@ func (sf sendFunc) withRetry(handler string, data *[]byte) (*resty.Response, err
 // Метод конструктора метрик в структры
 func (s *Stats) buildMetrics() []*storage.Data {
 	res := []*storage.Data{}
-	for k, v := range *s {
+	for k, v := range s.Data {
 		metric := storage.Data{Name: k}
 		switch t := v.(type) {
 		case float64:
