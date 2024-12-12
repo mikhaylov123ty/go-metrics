@@ -2,15 +2,13 @@ package client
 
 import (
 	"errors"
-	"fmt"
+	"github.com/go-resty/resty/v2"
 	"log"
 	"sync"
 	"syscall"
 	"time"
 
 	"metrics/internal/storage"
-
-	"github.com/go-resty/resty/v2"
 )
 
 const (
@@ -20,22 +18,28 @@ const (
 
 type (
 	// Вспомогательные типы для методов функций
-	sendFunc func(string, *[]byte) (*resty.Response, error)
-	statsBuf func() *Stats
+	statsBuf func() *stats
 )
 
-type Stats struct {
+type stats struct {
 	mu   sync.RWMutex
-	Data map[string]interface{}
+	data map[string]interface{}
+}
+
+type job struct {
+	data    *[]byte
+	urlPath string
 }
 
 // Метод повтора функции отправки метрик на сервер
-func (sf sendFunc) withRetry(handler string, data *[]byte) (*resty.Response, error) {
+func withRetry(request *resty.Request, URL string) (*resty.Response, error) {
+	var resp *resty.Response
+	var err error
 	wait := 1 * time.Second
 
 	// Попытки выполнения запроса и возврат при успешном выполнении
 	for range attempts {
-		resp, err := sf(handler, data)
+		resp, err = request.Post(URL)
 		if err == nil {
 			return resp, nil
 		}
@@ -53,13 +57,13 @@ func (sf sendFunc) withRetry(handler string, data *[]byte) (*resty.Response, err
 		}
 	}
 
-	return nil, fmt.Errorf("failed after %d attempts", attempts)
+	return nil, err
 }
 
 // Метод конструктора метрик в структры
-func (s *Stats) buildMetrics() []*storage.Data {
+func (s *stats) buildMetrics() []*storage.Data {
 	res := []*storage.Data{}
-	for k, v := range s.Data {
+	for k, v := range s.data {
 		metric := storage.Data{Name: k}
 		switch t := v.(type) {
 		case float64:
