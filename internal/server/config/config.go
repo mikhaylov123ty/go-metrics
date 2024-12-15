@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"flag"
@@ -16,24 +16,28 @@ type ServerConfig struct {
 	Logger      *Logger
 	FileStorage *FileStorage
 	DB          *DB
+	Key         string
 }
 
+// Cтруктура конфигруации логгера
 type Logger struct {
 	LogLevel string
 }
 
+// Структура конфигурации хранилища
 type FileStorage struct {
 	StoreInterval   int
 	FileStoragePath string
 	Restore         bool
 }
 
+// Структура конфигруации БД
 type DB struct {
 	Address string
 }
 
 // Конструктор конфигурации сервера
-func NewConfig() (*ServerConfig, error) {
+func New() (*ServerConfig, error) {
 	var err error
 	config := &ServerConfig{Logger: &Logger{}, FileStorage: &FileStorage{}, DB: &DB{}}
 
@@ -64,6 +68,9 @@ func (s *ServerConfig) parseFlags() {
 
 	// Флаги БД
 	flag.StringVar(&s.DB.Address, "d", "", "Host which to connect to DB. Example: \"postgres://postgres:postgres@postgres:5432/praktikum?sslmode=disable\"")
+
+	// Флаги подписи и шифрования
+	flag.StringVar(&s.Key, "k", "", "Key")
 
 	_ = flag.Value(s)
 	flag.Var(s, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
@@ -104,6 +111,10 @@ func (s *ServerConfig) parseEnv() error {
 
 	if address := os.Getenv("DATABASE_DSN"); address != "" {
 		s.DB.Address = address
+	}
+
+	if key := os.Getenv("KEY"); key != "" {
+		s.Key = key
 	}
 
 	return nil

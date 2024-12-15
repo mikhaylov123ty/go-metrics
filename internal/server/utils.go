@@ -1,6 +1,9 @@
 package server
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"io"
 	"net/http"
 )
@@ -17,6 +20,30 @@ type ResponseData struct {
 	Size   int
 }
 
+// Структура обертки для хэширования
+type HashResponseWriter struct {
+	http.ResponseWriter
+	key string
+}
+
+// Структура обертки компрессии gzip для интерфейса writer
+type GzipWriter struct {
+	http.ResponseWriter
+	Writer io.Writer
+}
+
+// Обертка метода Write для хеширования ответа и записи в хедер
+func (w *HashResponseWriter) Write(b []byte) (int, error) {
+	if w.key != "" {
+		hash := getHash(w.key, b)
+		w.ResponseWriter.Header().Set("HashSHA256", hex.EncodeToString(hash))
+	}
+
+	size, err := w.ResponseWriter.Write(b)
+
+	return size, err
+}
+
 // Обертка метода WriteHeader для дублирования данных в структуру ответа
 func (w *LoggingResponseWriter) WriteHeader(statusCode int) {
 	w.ResponseData.Status = statusCode
@@ -29,12 +56,6 @@ func (w *LoggingResponseWriter) Write(b []byte) (int, error) {
 	w.ResponseData.Size += size
 
 	return size, err
-}
-
-// Структура обертки компрессии gzip для интерфейса writer
-type GzipWriter struct {
-	http.ResponseWriter
-	Writer io.Writer
 }
 
 // Обертка метода Write для записи компрессированных сообщений
@@ -50,4 +71,12 @@ func ArrayContains(arr []string, str string) bool {
 		}
 	}
 	return false
+}
+
+// Метод создания хэша из сообщения и подписи ключом
+func getHash(key string, msg []byte) []byte {
+	h := hmac.New(sha256.New, []byte(key))
+	h.Write(msg)
+
+	return h.Sum(nil)
 }
