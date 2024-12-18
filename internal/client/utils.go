@@ -43,6 +43,7 @@ type metricJob struct {
 type restyResponse struct {
 	response *resty.Response
 	err      error
+	worker   int
 }
 
 // Метод сбора метрик с счетчиком
@@ -157,7 +158,7 @@ func (s *stats) buildMetrics() []*storage.Data {
 }
 
 // Метод повтора функции отправки метрик на сервер
-func withRetry(request *resty.Request, URL string) (*resty.Response, error) {
+func withRetry(request *resty.Request, URL string, w int) (*resty.Response, error) {
 	var resp *resty.Response
 	var err error
 	wait := 1 * time.Second
@@ -172,7 +173,7 @@ func withRetry(request *resty.Request, URL string) (*resty.Response, error) {
 		// Проверка ошибки для сценария недоступности сервера
 		switch {
 		case errors.Is(err, syscall.ECONNREFUSED):
-			log.Println("retrying after error:", err)
+			log.Printf("Worker: %d, retrying after error: %s\n", w, err.Error())
 			time.Sleep(wait)
 			wait += interval
 
