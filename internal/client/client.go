@@ -58,8 +58,8 @@ func (a *Agent) Run() {
 	}()
 
 	// Создание каналов для связи горутин отправки метрик
-	jobs := make(chan *metricJob, 1)
-	res := make(chan *restyResponse, 1)
+	jobs := make(chan *metricJob)
+	res := make(chan *restyResponse)
 
 	// Ограничение рабочих, которые выполняют одновременные запросы к серверу
 	for i := range a.rateLimit {
@@ -68,32 +68,33 @@ func (a *Agent) Run() {
 
 	// Запуск бесконечного цикла отправки метрики с интервалом reportInterval
 	for {
-		time.Sleep(time.Duration(a.reportInterval) * time.Millisecond)
+		time.Sleep(time.Duration(a.reportInterval) * time.Second)
 
 		// Проверка пустых батчей
-		if len(a.metrics) != 0 {
-
-			// Запуск отправки метрик батчем
-			if err := a.sendMetricsBatch(jobs); err != nil {
-				log.Println("Send metrics batch err:", err)
-			}
-
-			// Запуск горутины чтения результирующего канала
-			// В интерпретации задания, предполагается, что следующая отрпавка может быть выполнена,
-			// не дожидаясь окончания предыдущей итерации.
-			// Для ожидания достаточно запустить обычное чтение вне горутины.
-			go func(res chan *restyResponse) {
-				// Чтение результатов из результирующего канала по количеству заданий(горутин в цикле)
-				for range 1 {
-					r := <-res
-					if r.err != nil {
-						log.Printf("Error sending metric: %s", r.err.Error())
-						continue
-					}
-					log.Printf("Sent metric. Worker: %d Code: %d, URL: %s, Body: %s\n", r.worker, r.response.StatusCode(), r.response.Request.URL, r.response.Request.Body)
-				}
-			}(res)
+		if len(a.metrics) == 0 {
+			continue
 		}
+
+		// Запуск отправки метрик батчем
+		if err := a.sendMetricsBatch(jobs); err != nil {
+			log.Println("Send metrics batch err:", err)
+		}
+
+		// Запуск горутины чтения результирующего канала
+		// В интерпретации задания, предполагается, что следующая отрпавка может быть выполнена,
+		// не дожидаясь окончания предыдущей итерации.
+		// Для ожидания достаточно запустить обычное чтение вне горутины.
+		go func(res chan *restyResponse) {
+			// Чтение результатов из результирующего канала по количеству заданий(горутин в цикле)
+			for range 1 {
+				r := <-res
+				if r.err != nil {
+					log.Printf("Worker: %d, Failed sending metric: %s", r.worker, r.err.Error())
+					continue
+				}
+				log.Printf(" Worker: %d Metric sent, Code: %d, URL: %s, Body: %s\n", r.worker, r.response.StatusCode(), r.response.Request.URL, r.response.Request.Body)
+			}
+		}(res)
 	}
 }
 
@@ -103,21 +104,16 @@ func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyRespo
 	for data := range jobs {
 		URL := a.baseURL + data.urlPath
 
+		// Создание ответа для передачи в результирующий канал
+		result := &restyResponse{
+			worker: i,
+		}
+
 		// Формирование и выполнение запроса
-		resp, err := withRetry(a.withSign(a.client.R().
+		result.response, result.err = withRetry(a.withSign(a.client.R().
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Accept-Encoding", "gzip").
 			SetBody(*data.data)), URL, i)
-		if err != nil {
-			fmt.Printf("WORKER %d, error post %s\n", i, err.Error())
-		}
-
-		// Создание ответа для передачи в результирующий канал
-		result := &restyResponse{
-			response: resp,
-			err:      err,
-			worker:   i,
-		}
 
 		// Запись в результирующий канал
 		res <- result
@@ -131,14 +127,12 @@ func (a *Agent) sendMetricsBatch(jobs chan<- *metricJob) error {
 	// Сериализация метрик
 	data, err := json.Marshal(a.metrics)
 	if err != nil {
-		fmt.Println("err", err)
 		return fmt.Errorf("marshal metrics error: %w", err)
 	}
 
 	// Запись метрик в канал с заданиями
 	channelJob.data = &data
 	jobs <- channelJob
-	fmt.Println("SENT JOB TO CHANNEL")
 
 	return nil
 }
