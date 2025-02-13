@@ -63,8 +63,8 @@ func (a *Agent) Run() {
 	}()
 
 	// Создание каналов для связи горутин отправки метрик
-	jobs := make(chan *MetricJob)
-	res := make(chan *RestyResponse)
+	jobs := make(chan *metricJob)
+	res := make(chan *restyResponse)
 
 	// Ограничение рабочих, которые выполняют одновременные запросы к серверу
 	for i := range a.rateLimit {
@@ -89,7 +89,7 @@ func (a *Agent) Run() {
 		// В интерпретации задания, предполагается, что следующая отрпавка может быть выполнена,
 		// не дожидаясь окончания предыдущей итерации.
 		// Для ожидания достаточно запустить обычное чтение вне горутины.
-		go func(res chan *RestyResponse) {
+		go func(res chan *restyResponse) {
 			// Чтение результатов из результирующего канала по количеству заданий(горутин в цикле)
 			for range 1 {
 				r := <-res
@@ -104,13 +104,13 @@ func (a *Agent) Run() {
 }
 
 // Метод отправки запроса
-func (a *Agent) postWorker(i int, jobs <-chan *MetricJob, res chan<- *RestyResponse) {
+func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyResponse) {
 	// Чтение из канала с заданиями
 	for data := range jobs {
 		URL := a.baseURL + data.URLPath
 
 		// Создание ответа для передачи в результирующий канал
-		result := &RestyResponse{
+		result := &restyResponse{
 			Worker: i,
 		}
 
@@ -126,8 +126,8 @@ func (a *Agent) postWorker(i int, jobs <-chan *MetricJob, res chan<- *RestyRespo
 }
 
 // Метод отправки метрик батчами
-func (a *Agent) sendMetricsBatch(jobs chan<- *MetricJob) error {
-	channelJob := &MetricJob{URLPath: batchHandlerPath}
+func (a *Agent) sendMetricsBatch(jobs chan<- *metricJob) error {
+	channelJob := &metricJob{URLPath: batchHandlerPath}
 
 	// Сериализация метрик
 	data, err := json.Marshal(a.metrics)

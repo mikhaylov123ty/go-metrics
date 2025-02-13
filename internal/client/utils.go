@@ -5,13 +5,13 @@ import (
 )
 
 // Структура для канала заданий метрик
-type MetricJob struct {
+type metricJob struct {
 	Data    *[]byte
 	URLPath string
 }
 
 // Структура для канала ответов заданий метрик
-type RestyResponse struct {
+type restyResponse struct {
 	Response *resty.Response
 	Err      error
 	Worker   int
