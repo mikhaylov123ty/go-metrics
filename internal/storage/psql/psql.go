@@ -5,14 +5,14 @@ import (
 	"errors"
 	"fmt"
 
-	"metrics/internal/models"
-	"metrics/pkg"
-
 	sq "github.com/Masterminds/squirrel"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/jackc/pgx/v5/stdlib"
+
+	"metrics/internal/models"
+	"metrics/pkg"
 )
 
 const (

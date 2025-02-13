@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"sync"
 
-	"metrics/internal/models"
-
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/mem"
+
+	"metrics/internal/models"
 )
 
 // Вспомогательные типы для методов функций

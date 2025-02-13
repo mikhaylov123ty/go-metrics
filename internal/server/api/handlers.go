@@ -21,7 +21,7 @@ type Handler struct {
 type StorageCommands struct {
 	dataReader
 	dataUpdater
-	ping
+	pinger
 }
 
 // Интерфейсы хендлера
@@ -35,7 +35,7 @@ type dataUpdater interface {
 	UpdateBatch([]*models.Data) error
 }
 
-type ping interface {
+type pinger interface {
 	Ping() error
 }
 
@@ -48,11 +48,11 @@ func NewHandler(storageCommands *StorageCommands) *Handler {
 
 // Конструктор  сервиса, т.к. размещение инетрфейсов по месту использования
 // предполгает, что они неэкспортируемые
-func NewStorageService(dataReader dataReader, dataUpdater dataUpdater, ping ping) *StorageCommands {
+func NewStorageService(dataReader dataReader, dataUpdater dataUpdater, ping pinger) *StorageCommands {
 	return &StorageCommands{
 		dataReader:  dataReader,
 		dataUpdater: dataUpdater,
-		ping:        ping,
+		pinger:      ping,
 	}
 }
 
@@ -346,7 +346,7 @@ func (h *Handler) IndexGet(w http.ResponseWriter, req *http.Request) {
 
 // Метод ручки "GET /ping"
 func (h *Handler) PingGet(w http.ResponseWriter, req *http.Request) {
-	if h.storageCommands.ping == nil {
+	if h.storageCommands.pinger == nil {
 		log.Println("working from memory")
 		w.WriteHeader(http.StatusOK)
 		return

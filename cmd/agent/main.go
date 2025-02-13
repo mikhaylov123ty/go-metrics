@@ -3,11 +3,11 @@ package main
 import (
 	"log"
 	"net/http"
+	
+	_ "net/http/pprof"
 
 	"metrics/internal/client"
 	"metrics/internal/client/config"
-
-	_ "net/http/pprof"
 )
 
 func main() {

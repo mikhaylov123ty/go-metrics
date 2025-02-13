@@ -11,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-resty/resty/v2"
+
 	"metrics/internal/client/collector"
 	"metrics/internal/client/config"
 	"metrics/internal/models"
-
-	"github.com/go-resty/resty/v2"
 )
 
 const (

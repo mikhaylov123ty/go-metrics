@@ -11,19 +11,19 @@ import (
 )
 
 type MetricsFileStorage struct {
-	metricsReadUpdate
+	metricsReaderUpdater
 	fileStorage string
 }
 
-type metricsReadUpdate interface {
+type metricsReaderUpdater interface {
 	ReadAll() ([]*models.Data, error)
 	Update(*models.Data) error
 }
 
-func NewMetricsFileStorage(m metricsReadUpdate, fileStorage string) *MetricsFileStorage {
+func NewMetricsFileStorage(m metricsReaderUpdater, fileStorage string) *MetricsFileStorage {
 	return &MetricsFileStorage{
-		metricsReadUpdate: m,
-		fileStorage:       fileStorage,
+		metricsReaderUpdater: m,
+		fileStorage:          fileStorage,
 	}
 }
 
