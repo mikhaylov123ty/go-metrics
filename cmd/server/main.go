@@ -2,10 +2,11 @@ package main
 
 import (
 	"log"
-	"metrics/internal/server/config"
 
 	"metrics/internal/server"
 	"metrics/internal/server/api"
+	"metrics/internal/server/config"
+	"metrics/internal/server/metrics"
 	"metrics/internal/storage/memory"
 	"metrics/internal/storage/psql"
 	"metrics/pkg/logger"
@@ -62,9 +63,12 @@ func main() {
 		log.Fatal("Build Logger Config Error:", err)
 	}
 
+	metricsFileStorage := metrics.NewMetricsFileStorage(storageCommands, cfg.FileStorage.FileStoragePath)
+
 	// Инициализация инстанса сервера
 	serverInstance := server.New(
 		storageCommands,
+		metricsFileStorage,
 		loggerInstance,
 		cfg,
 	)

@@ -122,7 +122,8 @@ func (db *DataBase) Update(query *storage.Data) error {
 	if err != nil {
 		return fmt.Errorf("starting transaction: %w", err)
 	}
-
+	defer tx.Rollback()
+	
 	// Выполнение запроса
 	if _, err = tx.Exec(`
 		INSERT INTO metrics (name, type, value, delta)
@@ -135,7 +136,6 @@ func (db *DataBase) Update(query *storage.Data) error {
 		query.Type,
 		query.Value,
 		query.Delta); err != nil {
-		tx.Rollback()
 		return fmt.Errorf("updating metrics: %w", err)
 	}
 

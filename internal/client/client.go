@@ -5,21 +5,25 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
-	"sync"
+	"syscall"
 	"time"
 
-	"metrics/internal/client/config"
+	"metrics/internal/client/collector"
 	"metrics/internal/storage"
 
 	"github.com/go-resty/resty/v2"
+	"metrics/internal/client/config"
 )
 
-// Алиасы ручек
 const (
 	singleHandlerPath = "/update"
 	batchHandlerPath  = "/updates"
+
+	attempts = 3
+	interval = 2 * time.Second
 )
 
 // Структура агента
@@ -29,7 +33,7 @@ type Agent struct {
 	pollInterval   int
 	reportInterval int
 	metrics        []*storage.Data
-	statsBuf       statsBuf
+	statsBuf       collector.StatsBuf
 	key            string
 	rateLimit      int
 }
@@ -41,9 +45,10 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 		client:         resty.New(),
 		pollInterval:   cfg.PollInterval,
 		reportInterval: cfg.ReportInterval,
-		statsBuf:       collectMetrics(&stats{mu: sync.RWMutex{}, data: make(map[string]interface{})}),
-		key:            cfg.Key,
-		rateLimit:      cfg.RateLimit,
+		statsBuf: collector.CollectMetrics(&collector.Stats{
+			Data: make(map[string]interface{})}),
+		key:       cfg.Key,
+		rateLimit: cfg.RateLimit,
 	}
 }
 
@@ -53,13 +58,13 @@ func (a *Agent) Run() {
 	go func() {
 		for {
 			time.Sleep(time.Duration(a.pollInterval) * time.Second)
-			a.metrics = a.statsBuf().buildMetrics()
+			a.metrics = a.statsBuf().BuildMetrics()
 		}
 	}()
 
 	// Создание каналов для связи горутин отправки метрик
-	jobs := make(chan *metricJob)
-	res := make(chan *restyResponse)
+	jobs := make(chan *MetricJob)
+	res := make(chan *RestyResponse)
 
 	// Ограничение рабочих, которые выполняют одновременные запросы к серверу
 	for i := range a.rateLimit {
@@ -84,36 +89,36 @@ func (a *Agent) Run() {
 		// В интерпретации задания, предполагается, что следующая отрпавка может быть выполнена,
 		// не дожидаясь окончания предыдущей итерации.
 		// Для ожидания достаточно запустить обычное чтение вне горутины.
-		go func(res chan *restyResponse) {
+		go func(res chan *RestyResponse) {
 			// Чтение результатов из результирующего канала по количеству заданий(горутин в цикле)
 			for range 1 {
 				r := <-res
-				if r.err != nil {
-					log.Printf("Worker: %d, Failed sending metric: %s", r.worker, r.err.Error())
+				if r.Err != nil {
+					log.Printf("Worker: %d, Failed sending metric: %s", r.Worker, r.Err.Error())
 					continue
 				}
-				log.Printf(" Worker: %d Metric sent, Code: %d, URL: %s, Body: %s\n", r.worker, r.response.StatusCode(), r.response.Request.URL, r.response.Request.Body)
+				log.Printf(" Worker: %d Metric sent, Code: %d, URL: %s, Body: %s\n", r.Worker, r.Response.StatusCode(), r.Response.Request.URL, r.Response.Request.Body)
 			}
 		}(res)
 	}
 }
 
 // Метод отправки запроса
-func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyResponse) {
+func (a *Agent) postWorker(i int, jobs <-chan *MetricJob, res chan<- *RestyResponse) {
 	// Чтение из канала с заданиями
 	for data := range jobs {
-		URL := a.baseURL + data.urlPath
+		URL := a.baseURL + data.URLPath
 
 		// Создание ответа для передачи в результирующий канал
-		result := &restyResponse{
-			worker: i,
+		result := &RestyResponse{
+			Worker: i,
 		}
 
 		// Формирование и выполнение запроса
-		result.response, result.err = withRetry(a.withSign(a.client.R().
+		result.Response, result.Err = withRetry(a.withSign(a.client.R().
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Accept-Encoding", "gzip").
-			SetBody(*data.data)), URL, i)
+			SetBody(*data.Data)), URL, i)
 
 		// Запись в результирующий канал
 		res <- result
@@ -121,8 +126,8 @@ func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyRespo
 }
 
 // Метод отправки метрик батчами
-func (a *Agent) sendMetricsBatch(jobs chan<- *metricJob) error {
-	channelJob := &metricJob{urlPath: batchHandlerPath}
+func (a *Agent) sendMetricsBatch(jobs chan<- *MetricJob) error {
+	channelJob := &MetricJob{URLPath: batchHandlerPath}
 
 	// Сериализация метрик
 	data, err := json.Marshal(a.metrics)
@@ -131,7 +136,7 @@ func (a *Agent) sendMetricsBatch(jobs chan<- *metricJob) error {
 	}
 
 	// Запись метрик в канал с заданиями
-	channelJob.data = &data
+	channelJob.Data = &data
 	jobs <- channelJob
 
 	return nil
@@ -148,4 +153,33 @@ func (a *Agent) withSign(request *resty.Request) *resty.Request {
 	}
 
 	return request
+}
+
+// Метод повтора функции отправки метрик на сервер
+func withRetry(request *resty.Request, URL string, w int) (*resty.Response, error) {
+	var resp *resty.Response
+	var err error
+	wait := 1 * time.Second
+
+	// Попытки выполнения запроса и возврат при успешном выполнении
+	for range attempts {
+		resp, err = request.Post(URL)
+		if err == nil {
+			return resp, nil
+		}
+
+		// Проверка ошибки для сценария недоступности сервера
+		switch {
+		case errors.Is(err, syscall.ECONNREFUSED):
+			log.Printf("Worker: %d, retrying after error: %s\n", w, err.Error())
+			time.Sleep(wait)
+			wait += interval
+
+		// Возврат ошибки по умолчанию
+		default:
+			return nil, err
+		}
+	}
+
+	return nil, err
 }

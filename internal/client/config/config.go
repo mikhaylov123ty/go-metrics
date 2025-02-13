@@ -41,8 +41,8 @@ func (a *AgentConfig) parseFlags() {
 	flag.StringVar(&a.Port, "port", "8080", "Port on which to listen. Example: \"8081\"")
 
 	// Флаги интервалов метрик
-	flag.IntVar(&a.ReportInterval, "r", 10, "Metrics send interval. Defalut: 10")
-	flag.IntVar(&a.PollInterval, "p", 2, "Metrics update interval. Defalut: 2")
+	flag.IntVar(&a.ReportInterval, "r", 10, "Metrics send interval in seconds. Defalut: 10")
+	flag.IntVar(&a.PollInterval, "p", 2, "Metrics update interval in seconds. Defalut: 2")
 
 	// Флаги подписи и шифрования
 	flag.StringVar(&a.Key, "k", "", "Key")

@@ -49,6 +49,10 @@ func New() (*ServerConfig, error) {
 		return nil, fmt.Errorf("error parsing environment variables: %w", err)
 	}
 
+	if config.DB.Address != "" {
+		config.FileStorage.Restore = false
+	}
+
 	return config, nil
 }
 
@@ -62,7 +66,7 @@ func (s *ServerConfig) parseFlags() {
 	flag.StringVar(&s.Logger.LogLevel, "l", "info", "Log level. Example: \"info\"")
 
 	// Флаги файлового хранилища
-	flag.IntVar(&s.FileStorage.StoreInterval, "i", 300, "Interval in seconds, to store metrics in file.")
+	flag.IntVar(&s.FileStorage.StoreInterval, "i", 10, "Interval in seconds, to store metrics in file.")
 	flag.StringVar(&s.FileStorage.FileStoragePath, "f", "tempFile.txt", "Path to file to store metrics. Example: ./tempFile.txt")
 	flag.BoolVar(&s.FileStorage.Restore, "r", true, "Restore previous metrics from file.")
 

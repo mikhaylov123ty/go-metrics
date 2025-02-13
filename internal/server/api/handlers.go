@@ -15,6 +15,7 @@ type Handler struct {
 	storageCommands *StorageCommands
 }
 
+// TODO разбить по подфайлам
 // Комманды хендлера
 type StorageCommands struct {
 	read

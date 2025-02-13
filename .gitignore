@@ -27,3 +27,6 @@ vendor/
 
 # Local test
 metricstest-darwin-arm64
+
+# Mac store files
+.DS_Store
