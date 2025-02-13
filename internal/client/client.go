@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"metrics/internal/client/collector"
-	"metrics/internal/storage"
+	"metrics/internal/client/config"
+	"metrics/internal/models"
 
 	"github.com/go-resty/resty/v2"
-	"metrics/internal/client/config"
 )
 
 const (
@@ -32,7 +32,7 @@ type Agent struct {
 	client         *resty.Client
 	pollInterval   int
 	reportInterval int
-	metrics        []*storage.Data
+	metrics        []*models.Data
 	statsBuf       collector.StatsBuf
 	key            string
 	rateLimit      int

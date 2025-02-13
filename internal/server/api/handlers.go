@@ -7,37 +7,34 @@ import (
 	"net/http"
 	"strconv"
 
-	"metrics/internal/storage"
+	"metrics/internal/models"
 )
+
+//TODO разбить по файлам
 
 // Структура хендлера
 type Handler struct {
 	storageCommands *StorageCommands
 }
 
-// TODO разбить по подфайлам
 // Комманды хендлера
 type StorageCommands struct {
-	read
-	readAll
-	update
-	updateBatch
+	dataReader
+	dataUpdater
 	ping
 }
 
 // Интерфейсы хендлера
-type read interface {
-	Read(string) (*storage.Data, error)
+type dataReader interface {
+	Read(string) (*models.Data, error)
+	ReadAll() ([]*models.Data, error)
 }
-type readAll interface {
-	ReadAll() ([]*storage.Data, error)
+
+type dataUpdater interface {
+	Update(*models.Data) error
+	UpdateBatch([]*models.Data) error
 }
-type update interface {
-	Update(*storage.Data) error
-}
-type updateBatch interface {
-	UpdateBatch([]*storage.Data) error
-}
+
 type ping interface {
 	Ping() error
 }
@@ -50,13 +47,11 @@ func NewHandler(storageCommands *StorageCommands) *Handler {
 }
 
 // Конструктор  сервиса, т.к. размещение инетрфейсов по месту использования
-// предполгает, что они неимпортируемые
-func NewStorageService(read read, readAll readAll, update update, updateBatch updateBatch, ping ping) *StorageCommands {
+// предполгает, что они неэкспортируемые
+func NewStorageService(dataReader dataReader, dataUpdater dataUpdater, ping ping) *StorageCommands {
 	return &StorageCommands{
-		read:        read,
-		readAll:     readAll,
-		update:      update,
-		updateBatch: updateBatch,
+		dataReader:  dataReader,
+		dataUpdater: dataUpdater,
 		ping:        ping,
 	}
 }
@@ -81,7 +76,7 @@ func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
 	// Десериализация тела запроса
-	storageData := storage.Data{}
+	storageData := models.Data{}
 	if err = json.Unmarshal(body, &storageData); err != nil {
 		log.Println("UpdatePostJSON: failed unmarshall request body", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -126,7 +121,7 @@ func (h *Handler) UpdatesPostJSON(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
 	// Десериализация тела запроса
-	storageData := []*storage.Data{}
+	storageData := []*models.Data{}
 	if err = json.Unmarshal(body, &storageData); err != nil {
 		log.Println("UpdatesPostJSON: failed unmarshall request body", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -165,7 +160,7 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	var err error
 
 	// Конструктор даты хранилища
-	storageData := &storage.Data{
+	storageData := &models.Data{
 		Type: req.PathValue("type"),
 		Name: req.PathValue("name"),
 	}
@@ -233,7 +228,7 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
 	// Десериализация тела
-	storageData := storage.Data{}
+	storageData := models.Data{}
 	if err = json.Unmarshal(body, &storageData); err != nil {
 		log.Println("ValueGetJSON: failed unmarshall request body", err)
 		w.WriteHeader(http.StatusBadRequest)

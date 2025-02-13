@@ -1,10 +1,12 @@
 package api
 
 import (
-	"github.com/stretchr/testify/assert"
-	"metrics/internal/storage/memory"
 	"net/http/httptest"
 	"testing"
+
+	"metrics/internal/storage/memory"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var commands *StorageCommands
@@ -12,10 +14,8 @@ var commands *StorageCommands
 func init() {
 	newMemStorage := memory.NewMemoryStorage()
 	commands = &StorageCommands{
-		read:        newMemStorage,
-		readAll:     newMemStorage,
-		update:      newMemStorage,
-		updateBatch: newMemStorage,
+		dataReader:  newMemStorage,
+		dataUpdater: newMemStorage,
 	}
 
 }

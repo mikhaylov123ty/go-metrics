@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"metrics/internal/storage"
+	"metrics/internal/models"
 )
 
 type MetricsFileStorage struct {
@@ -16,8 +16,8 @@ type MetricsFileStorage struct {
 }
 
 type metricsReadUpdate interface {
-	ReadAll() ([]*storage.Data, error)
-	Update(*storage.Data) error
+	ReadAll() ([]*models.Data, error)
+	Update(*models.Data) error
 }
 
 func NewMetricsFileStorage(m metricsReadUpdate, fileStorage string) *MetricsFileStorage {
@@ -82,7 +82,7 @@ func (m *MetricsFileStorage) InitMetricsFromFile() error {
 	// Разбивка по линиям файла
 	lines := strings.Split(string(fileData), "\n")
 	for _, line := range lines {
-		storageData := &storage.Data{}
+		storageData := &models.Data{}
 		if err = json.Unmarshal([]byte(line), storageData); err != nil {
 			return fmt.Errorf("unmarshal metrics: %w", err)
 		}

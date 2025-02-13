@@ -1,8 +1,9 @@
 package metrics
 
 import (
-	"metrics/internal/storage/memory"
 	"testing"
+
+	"metrics/internal/storage/memory"
 )
 
 var fileStorage *MetricsFileStorage

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"metrics/internal/storage"
+	"metrics/internal/models"
 	"metrics/pkg"
 
 	sq "github.com/Masterminds/squirrel"
@@ -55,8 +55,8 @@ func (db *DataBase) BootStrap(connectionString string) error {
 }
 
 // Метод получения записи из хранилища по id
-func (db *DataBase) Read(name string) (*storage.Data, error) {
-	res := storage.Data{}
+func (db *DataBase) Read(name string) (*models.Data, error) {
+	res := models.Data{}
 
 	// Формирование строки запроса и аргументов
 	query, args, err := sq.Select("type, name, value, delta").
@@ -81,8 +81,8 @@ func (db *DataBase) Read(name string) (*storage.Data, error) {
 }
 
 // Метод получения записей из хранилища
-func (db *DataBase) ReadAll() ([]*storage.Data, error) {
-	res := make([]*storage.Data, 0)
+func (db *DataBase) ReadAll() ([]*models.Data, error) {
+	res := make([]*models.Data, 0)
 
 	// Формирование строки запроса и аргументов
 	query, args, err := sq.Select("type, name, value, delta").
@@ -104,7 +104,7 @@ func (db *DataBase) ReadAll() ([]*storage.Data, error) {
 
 	// Сканирование строк
 	for rows.Next() {
-		row := storage.Data{}
+		row := models.Data{}
 		if err = rows.Scan(&row.Type, &row.Name, &row.Value, &row.Delta); err != nil {
 			return nil, fmt.Errorf("scanning row: %w", err)
 		}
@@ -116,14 +116,14 @@ func (db *DataBase) ReadAll() ([]*storage.Data, error) {
 }
 
 // Метод создания или обновления существующей записи в хранилище
-func (db *DataBase) Update(query *storage.Data) error {
+func (db *DataBase) Update(query *models.Data) error {
 	// Начало транзакции
 	tx, err := db.Instance.Begin()
 	if err != nil {
 		return fmt.Errorf("starting transaction: %w", err)
 	}
 	defer tx.Rollback()
-	
+
 	// Выполнение запроса
 	if _, err = tx.Exec(`
 		INSERT INTO metrics (name, type, value, delta)
@@ -144,7 +144,7 @@ func (db *DataBase) Update(query *storage.Data) error {
 }
 
 // Метод создания или обновление существующих записей в хранилище
-func (db *DataBase) UpdateBatch(queries []*storage.Data) error {
+func (db *DataBase) UpdateBatch(queries []*models.Data) error {
 	// Начало транзакции
 	tx, err := db.Instance.Begin()
 	if err != nil {

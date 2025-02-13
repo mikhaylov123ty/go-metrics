@@ -39,8 +39,6 @@ func main() {
 			psqlStorage,
 			psqlStorage,
 			psqlStorage,
-			psqlStorage,
-			psqlStorage,
 		)
 		log.Println("Storage: postgres")
 
@@ -48,8 +46,6 @@ func main() {
 		memStorage := memory.NewMemoryStorage()
 
 		storageCommands = api.NewStorageService(
-			memStorage,
-			memStorage,
 			memStorage,
 			memStorage,
 			nil,

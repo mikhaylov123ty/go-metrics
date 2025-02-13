@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"sync"
 
-	"metrics/internal/storage"
+	"metrics/internal/models"
 
 	"github.com/shirou/gopsutil/v4/cpu"
 	"github.com/shirou/gopsutil/v4/mem"
@@ -106,10 +106,10 @@ func CollectMetrics(statsBuf *Stats) StatsBuf {
 }
 
 // Метод конструктора метрик в структры
-func (s *Stats) BuildMetrics() []*storage.Data {
-	var res []*storage.Data
+func (s *Stats) BuildMetrics() []*models.Data {
+	var res []*models.Data
 	for k, v := range s.Data {
-		metric := &storage.Data{Name: k}
+		metric := &models.Data{Name: k}
 		switch t := v.(type) {
 		case float64:
 			metric.Type = "gauge"

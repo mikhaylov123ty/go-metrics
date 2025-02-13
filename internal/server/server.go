@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"crypto/hmac"
 	"encoding/hex"
-	"github.com/go-chi/chi/v5/middleware"
 	"io"
 	"log"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 	"metrics/internal/server/metrics"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/sirupsen/logrus"
 )
 
