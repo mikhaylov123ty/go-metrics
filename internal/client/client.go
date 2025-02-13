@@ -93,11 +93,11 @@ func (a *Agent) Run() {
 			// Чтение результатов из результирующего канала по количеству заданий(горутин в цикле)
 			for range 1 {
 				r := <-res
-				if r.Err != nil {
-					log.Printf("Worker: %d, Failed sending metric: %s", r.Worker, r.Err.Error())
+				if r.err != nil {
+					log.Printf("Worker: %d, Failed sending metric: %s", r.worker, r.err.Error())
 					continue
 				}
-				log.Printf(" Worker: %d Metric sent, Code: %d, URL: %s, Body: %s\n", r.Worker, r.Response.StatusCode(), r.Response.Request.URL, r.Response.Request.Body)
+				log.Printf(" Worker: %d Metric sent, Code: %d, URL: %s, Body: %s\n", r.worker, r.response.StatusCode(), r.response.Request.URL, r.response.Request.Body)
 			}
 		}(res)
 	}
@@ -107,18 +107,18 @@ func (a *Agent) Run() {
 func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyResponse) {
 	// Чтение из канала с заданиями
 	for data := range jobs {
-		URL := a.baseURL + data.URLPath
+		URL := a.baseURL + data.urlPath
 
 		// Создание ответа для передачи в результирующий канал
 		result := &restyResponse{
-			Worker: i,
+			worker: i,
 		}
 
 		// Формирование и выполнение запроса
-		result.Response, result.Err = withRetry(a.withSign(a.client.R().
+		result.response, result.err = withRetry(a.withSign(a.client.R().
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Accept-Encoding", "gzip").
-			SetBody(*data.Data)), URL, i)
+			SetBody(*data.data)), URL, i)
 
 		// Запись в результирующий канал
 		res <- result
@@ -127,7 +127,7 @@ func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyRespo
 
 // Метод отправки метрик батчами
 func (a *Agent) sendMetricsBatch(jobs chan<- *metricJob) error {
-	channelJob := &metricJob{URLPath: batchHandlerPath}
+	channelJob := &metricJob{urlPath: batchHandlerPath}
 
 	// Сериализация метрик
 	data, err := json.Marshal(a.metrics)
@@ -136,7 +136,7 @@ func (a *Agent) sendMetricsBatch(jobs chan<- *metricJob) error {
 	}
 
 	// Запись метрик в канал с заданиями
-	channelJob.Data = &data
+	channelJob.data = &data
 	jobs <- channelJob
 
 	return nil
