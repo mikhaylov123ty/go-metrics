@@ -1,3 +1,4 @@
+// Модуль api описывает эндпоинты
 package api
 
 import (
@@ -12,29 +13,31 @@ import (
 
 //TODO разбить по файлам
 
-// Структура хендлера
+// Handler - структура хендлера
 type Handler struct {
 	storageCommands *StorageCommands
 }
 
-// Комманды хендлера
+// StorageCommands - команды для взаимодействия с хранилищем
 type StorageCommands struct {
 	dataReader
 	dataUpdater
 	pinger
 }
 
-// Интерфейсы хендлера
+// dataReader - интерфейс хендлера для чтения из базы
 type dataReader interface {
 	Read(string) (*models.Data, error)
 	ReadAll() ([]*models.Data, error)
 }
 
+// dataUpdater - интерфейс хендлера для записи в базу
 type dataUpdater interface {
 	Update(*models.Data) error
 	UpdateBatch([]*models.Data) error
 }
 
+// pinger - интерфейс хендлера для проверки базы
 type pinger interface {
 	Ping() error
 }
@@ -46,7 +49,7 @@ func NewHandler(storageCommands *StorageCommands) *Handler {
 	}
 }
 
-// Конструктор  сервиса, т.к. размещение инетрфейсов по месту использования
+// NewStorageService - конструктор  сервиса, т.к. размещение инетрфейсов по месту использования
 // предполгает, что они неэкспортируемые
 func NewStorageService(dataReader dataReader, dataUpdater dataUpdater, ping pinger) *StorageCommands {
 	return &StorageCommands{
@@ -56,7 +59,7 @@ func NewStorageService(dataReader dataReader, dataUpdater dataUpdater, ping ping
 	}
 }
 
-// Метод ручки "POST /update с телом JSON"
+// UpdatePostJSON - метод ручки "POST /update с телом JSON"
 func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	var err error
 
@@ -101,7 +104,7 @@ func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// Метод ручки "POST /updates с телом JSON" (Batches)
+// UpdatesPostJSON - метод ручки "POST /updates с телом JSON" (Batches)
 func (h *Handler) UpdatesPostJSON(w http.ResponseWriter, req *http.Request) {
 	var err error
 
@@ -155,7 +158,7 @@ func (h *Handler) UpdatesPostJSON(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// Метод ручки "POST /update/{type}/{name}/{value}"
+// UpdatePost - метод ручки "POST /update/{type}/{name}/{value}"
 func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	var err error
 
@@ -210,7 +213,7 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// Метод ручки "POST /value"
+// ValueGetJSON - метод ручки "POST /value"
 func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	// Проверка хедера
 	if req.Header.Get("Content-Type") != "application/json" {
@@ -264,7 +267,7 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// Метод ручки "GET /value/{type}/{name}"
+// ValueGet - метод ручки "GET /value/{type}/{name}"
 func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 	var err error
 
@@ -314,7 +317,7 @@ func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// Метод ручки "GET /"
+// IndexGet - метод ручки "GET /"
 func (h *Handler) IndexGet(w http.ResponseWriter, req *http.Request) {
 	// Получение всех записей
 	data, err := h.storageCommands.ReadAll()
@@ -344,7 +347,7 @@ func (h *Handler) IndexGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// Метод ручки "GET /ping"
+// PingGet - метод ручки "GET /ping"
 func (h *Handler) PingGet(w http.ResponseWriter, req *http.Request) {
 	if h.storageCommands.pinger == nil {
 		log.Println("working from memory")

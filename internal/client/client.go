@@ -1,3 +1,4 @@
+// Модуль client реализует бизнес логику агента сбора метрик и передачу на сервер
 package client
 
 import (
@@ -26,7 +27,7 @@ const (
 	interval = 2 * time.Second
 )
 
-// Структура агента
+// Agent - структура агента
 type Agent struct {
 	baseURL        string
 	client         *resty.Client
@@ -38,7 +39,7 @@ type Agent struct {
 	rateLimit      int
 }
 
-// Конструктор агента
+// NewAgent - конструктор агента
 func NewAgent(cfg *config.AgentConfig) *Agent {
 	return &Agent{
 		baseURL:        "http://" + cfg.String(),
@@ -52,7 +53,7 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 	}
 }
 
-// Запуск агента
+// Run запускает агента
 func (a *Agent) Run() {
 	// Запуск горутины по сбору метрик с интервалом pollInterval
 	go func() {

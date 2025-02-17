@@ -8,25 +8,25 @@ import (
 	"net/http"
 )
 
-// Структура обертки логирования для интерфейса writer
+// LoggingResponseWriter - обертка логирования для интерфейса writer
 type LoggingResponseWriter struct {
 	http.ResponseWriter
 	ResponseData *ResponseData
 }
 
-// Структура даты ответа
+// ResponseData - структура даты ответа
 type ResponseData struct {
 	Status int
 	Size   int
 }
 
-// Структура обертки для хэширования
+// HashResponseWriter - обертка для хэширования
 type HashResponseWriter struct {
 	http.ResponseWriter
 	key string
 }
 
-// Структура обертки компрессии gzip для интерфейса writer
+// GzipWriter - обертка компрессии gzip для интерфейса writer
 type GzipWriter struct {
 	http.ResponseWriter
 	Writer io.Writer
@@ -63,7 +63,7 @@ func (w GzipWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
-// Метод проверки строки в массиве строк
+// ArrayContains проверяет наличие строки в массиве строк
 func ArrayContains(arr []string, str string) bool {
 	for _, a := range arr {
 		if a == str {

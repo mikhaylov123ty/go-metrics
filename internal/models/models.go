@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-// Структура данных хранилища
+// Data - структура данных хранилища
 type Data struct {
 	Type  string   `json:"type"`
 	Name  string   `json:"id"`
@@ -12,7 +12,7 @@ type Data struct {
 	Delta *int64   `json:"delta,omitempty"`
 }
 
-// Метод проверки входящих данных
+// CheckData - метод проверки входящих данных
 func (d *Data) CheckData() error {
 	if d.Value == nil && d.Delta == nil {
 		return fmt.Errorf("empty metrics values")

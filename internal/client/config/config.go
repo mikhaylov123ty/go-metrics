@@ -1,3 +1,4 @@
+// Модуль config инициализирует конфигрурацию агента
 package config
 
 import (
@@ -8,7 +9,7 @@ import (
 	"strings"
 )
 
-// Структура конфигурации агента
+// AgentConfig - структура конфигурации агента
 type AgentConfig struct {
 	Host           string
 	Port           string
@@ -18,7 +19,7 @@ type AgentConfig struct {
 	RateLimit      int
 }
 
-// Конструктор конфигурации агента
+// New - конструктор конфигурации агента
 func New() (*AgentConfig, error) {
 	var err error
 	config := &AgentConfig{}
@@ -34,7 +35,7 @@ func New() (*AgentConfig, error) {
 	return config, nil
 }
 
-// Конструктор инструкций флагов агента
+// Парсинг инструкций флагов агента
 func (a *AgentConfig) parseFlags() {
 	// Базовые флаги
 	flag.StringVar(&a.Host, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
@@ -56,7 +57,7 @@ func (a *AgentConfig) parseFlags() {
 	flag.Parse()
 }
 
-// Конструктор инструкций переменных окружений агента
+// Парсинг инструкций переменных окружений агента
 func (a *AgentConfig) parseEnv() error {
 	var err error
 	if address := os.Getenv("ADDRESS"); address != "" {
@@ -90,12 +91,12 @@ func (a *AgentConfig) parseEnv() error {
 	return nil
 }
 
-// Реализация интерфейса flag.Value
+// String реализует интерфейс flag.Value
 func (a *AgentConfig) String() string {
 	return a.Host + ":" + a.Port
 }
 
-// Реализация интерфейса flag.Value
+// Set реализует интерфейс flag.Value
 func (a *AgentConfig) Set(value string) error {
 	values := strings.Split(value, ":")
 	if len(values) != 2 {
@@ -104,5 +105,6 @@ func (a *AgentConfig) Set(value string) error {
 
 	a.Host = values[0]
 	a.Port = values[1]
+
 	return nil
 }

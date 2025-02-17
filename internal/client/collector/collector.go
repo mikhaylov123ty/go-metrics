@@ -1,3 +1,4 @@
+// Модуль collector собирает данные метрик и приводит к формату данных хранилища
 package collector
 
 import (
@@ -13,17 +14,15 @@ import (
 	"metrics/internal/models"
 )
 
-// Вспомогательные типы для методов функций
-type (
-	StatsBuf func() *Stats
-)
+// StatsBuf - тип функция-замыкание для сбора метрик и хранения счетчика
+type StatsBuf func() *Stats
 
-// Структура статистики
+// Stats - структура метрик
 type Stats struct {
 	Data map[string]interface{}
 }
 
-// Метод сбора метрик с счетчиком
+// CollectMetrics собирает метрики и ведет счетчик
 func CollectMetrics(statsBuf *Stats) StatsBuf {
 	counter := 1
 	return func() *Stats {
@@ -105,7 +104,7 @@ func CollectMetrics(statsBuf *Stats) StatsBuf {
 	}
 }
 
-// Метод конструктора метрик в структры
+// BuildMetrics - type switch метрик
 func (s *Stats) BuildMetrics() []*models.Data {
 	var res []*models.Data
 	for k, v := range s.Data {

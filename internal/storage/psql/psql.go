@@ -19,12 +19,12 @@ const (
 	migrateFilesPath = "file://./internal/storage/psql/migrations"
 )
 
-// Структура хранилища
+// DataBase - структура инстанса хранилища
 type DataBase struct {
 	Instance *sql.DB
 }
 
-// Конструктор PostgreSQL
+// NewPSQLDataBase - конструктор PostgreSQL
 func NewPSQLDataBase(connectionString string) (*DataBase, error) {
 	db, err := sql.Open("pgx", connectionString)
 	if err != nil {
@@ -38,7 +38,7 @@ func NewPSQLDataBase(connectionString string) (*DataBase, error) {
 	return &DataBase{Instance: db}, nil
 }
 
-// Метод подготовки БД
+// BootStrap подготовка БД
 func (db *DataBase) BootStrap(connectionString string) error {
 	// Создание новой миграции
 	migration, err := migrate.New(migrateFilesPath, connectionString)
@@ -54,7 +54,7 @@ func (db *DataBase) BootStrap(connectionString string) error {
 	return nil
 }
 
-// Метод получения записи из хранилища по id
+// Read получает метрику из хранилища по названию
 func (db *DataBase) Read(name string) (*models.Data, error) {
 	res := models.Data{}
 
@@ -80,7 +80,7 @@ func (db *DataBase) Read(name string) (*models.Data, error) {
 	return &res, nil
 }
 
-// Метод получения записей из хранилища
+// ReadAll получает все метрики из хранилища
 func (db *DataBase) ReadAll() ([]*models.Data, error) {
 	res := make([]*models.Data, 0)
 
@@ -115,7 +115,7 @@ func (db *DataBase) ReadAll() ([]*models.Data, error) {
 	return res, nil
 }
 
-// Метод создания или обновления существующей записи в хранилище
+// Update создает новую или обновляет существующую запись метрики в хранилище
 func (db *DataBase) Update(query *models.Data) error {
 	// Начало транзакции
 	tx, err := db.Instance.Begin()
@@ -143,7 +143,7 @@ func (db *DataBase) Update(query *models.Data) error {
 	return tx.Commit()
 }
 
-// Метод создания или обновление существующих записей в хранилище
+// UpdateBatch создает новые или обновляет существующие записи метрики в хранилище
 func (db *DataBase) UpdateBatch(queries []*models.Data) error {
 	// Начало транзакции
 	tx, err := db.Instance.Begin()
@@ -181,7 +181,7 @@ func (db *DataBase) UpdateBatch(queries []*models.Data) error {
 	return tx.Commit()
 }
 
-// Метод проверки доступности БД
+// Ping проверяет доступность БД
 func (db *DataBase) Ping() error {
 	if err := pkg.AnyFunc(db.Instance.Ping).WithRetry(); err != nil {
 		return err

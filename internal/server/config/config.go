@@ -1,3 +1,4 @@
+// Модуль config инициализирует конфигрурацию сервера
 package config
 
 import (
@@ -8,7 +9,7 @@ import (
 	"strings"
 )
 
-// Структура конфигурации сервера
+// ServerConfig - структура конфигурации сервера
 type ServerConfig struct {
 	Host        string
 	Port        string
@@ -19,24 +20,24 @@ type ServerConfig struct {
 	Key         string
 }
 
-// Cтруктура конфигруации логгера
+// Logger - структура конфигруации логгера
 type Logger struct {
 	LogLevel string
 }
 
-// Структура конфигурации хранилища
+// FileStorage - структура конфигурации хранилища
 type FileStorage struct {
 	StoreInterval   int
 	FileStoragePath string
 	Restore         bool
 }
 
-// Структура конфигруации БД
+// DB - структура конфигруации БД
 type DB struct {
 	Address string
 }
 
-// Конструктор конфигурации сервера
+// New - конструктор конфигурации сервера
 func New() (*ServerConfig, error) {
 	var err error
 	config := &ServerConfig{Logger: &Logger{}, FileStorage: &FileStorage{}, DB: &DB{}}
@@ -56,7 +57,7 @@ func New() (*ServerConfig, error) {
 	return config, nil
 }
 
-// Конструктор инструкций флагов сервера
+// Парсинг инструкций флагов сервера
 func (s *ServerConfig) parseFlags() {
 	// Базовые флаги
 	flag.StringVar(&s.Host, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
@@ -82,7 +83,7 @@ func (s *ServerConfig) parseFlags() {
 	flag.Parse()
 }
 
-// Конструктор инструкций переменных окружений сервера
+// Парсинг инструкций переменных окружений сервера
 func (s *ServerConfig) parseEnv() error {
 	var err error
 	if address := os.Getenv("ADDRESS"); address != "" {
@@ -124,12 +125,12 @@ func (s *ServerConfig) parseEnv() error {
 	return nil
 }
 
-// Реализация интерфейса flag.Value
+// String реализаует интерфейс flag.Value
 func (s *ServerConfig) String() string {
 	return s.Host + ":" + s.Port
 }
 
-// Реализация интерфейса flag.Value
+// Set реализует интерфейса flag.Value
 func (s *ServerConfig) Set(value string) error {
 	values := strings.Split(value, ":")
 	if len(values) != 2 {
@@ -138,5 +139,6 @@ func (s *ServerConfig) Set(value string) error {
 
 	s.Host = values[0]
 	s.Port = values[1]
+
 	return nil
 }

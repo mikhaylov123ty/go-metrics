@@ -13,10 +13,10 @@ const (
 	interval = 2 * time.Second
 )
 
-// Вспомогательный типы для методов примитивных функций
+// AnyFunc - вспомогательный тип для методов примитивных функций
 type AnyFunc func() error
 
-// Метод повтора примитивной функции
+// WithRetry повторяет примитивую функцию
 func (af AnyFunc) WithRetry() error {
 	var err error
 	wait := 1 * time.Second

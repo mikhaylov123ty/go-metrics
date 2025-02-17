@@ -1,3 +1,4 @@
+// Модуль server реализует эндпоинты для взаимодействия и хранения метрик
 package server
 
 import (
@@ -20,7 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Структура сервера
+// Server - структура сервера
 type Server struct {
 	services        services
 	logger          *logrus.Logger
@@ -30,12 +31,13 @@ type Server struct {
 	key             string
 }
 
+// services - структура команд БД и файла с бэкапом
 type services struct {
 	storageCommands    *api.StorageCommands
 	metricsFileStorage *metrics.MetricsFileStorage
 }
 
-// Конструктор инстанса сервера
+// New - конструктор инстанса сервера
 func New(storageCommands *api.StorageCommands, metricsFileStorage *metrics.MetricsFileStorage, logger *logrus.Logger, cfg *config.ServerConfig) *Server {
 	return &Server{
 		services: services{
@@ -50,7 +52,7 @@ func New(storageCommands *api.StorageCommands, metricsFileStorage *metrics.Metri
 	}
 }
 
-// Метод запуска сервера
+// Start запускает сервера
 func (s *Server) Start(address string) {
 	// Инициализация даты из файла
 	if s.restore {

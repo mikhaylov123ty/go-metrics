@@ -1,3 +1,4 @@
+// Модуль metrics делает бэкап метрик в файл и восстанавливает при старте сервера
 package metrics
 
 import (
@@ -10,16 +11,19 @@ import (
 	"metrics/internal/models"
 )
 
+// MetricsFileStorage - структура для взаимодействия метрик с файлом и хранилищем
 type MetricsFileStorage struct {
 	metricsReaderUpdater
 	fileStorage string
 }
 
+// metricsReaderUpdater - интерфейс для взаимодействия с БД
 type metricsReaderUpdater interface {
 	ReadAll() ([]*models.Data, error)
 	Update(*models.Data) error
 }
 
+// NewMetricsFileStorage - конструктор структуры метрик
 func NewMetricsFileStorage(m metricsReaderUpdater, fileStorage string) *MetricsFileStorage {
 	return &MetricsFileStorage{
 		metricsReaderUpdater: m,
@@ -27,7 +31,7 @@ func NewMetricsFileStorage(m metricsReaderUpdater, fileStorage string) *MetricsF
 	}
 }
 
-// Метод записи метрик в файл
+// StoreMetrics сохраняет метрики в файл
 func (m *MetricsFileStorage) StoreMetrics() error {
 	// Чтение всех метрик из хранилища
 	metrics, err := m.ReadAll()
@@ -65,7 +69,7 @@ func (m *MetricsFileStorage) StoreMetrics() error {
 	return nil
 }
 
-// Метод восстановления данных метрик из файла
+// InitMetricsFromFile восстанавливает метрики из файла
 func (m *MetricsFileStorage) InitMetricsFromFile() error {
 	fileData, err := os.ReadFile(m.fileStorage)
 	if err != nil {
