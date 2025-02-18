@@ -23,17 +23,11 @@ func init() {
 		dataUpdater: newMemStorage,
 	}
 
-	counterVal := int64(100)
-	gaugeVal := float64(200)
+	gaugeVal := float64(3251325234)
 	newMemStorage.UpdateBatch([]*models.Data{
 		{
-			Type:  "counter",
-			Name:  "testCounter",
-			Delta: &counterVal,
-		},
-		{
 			Type:  "gauge",
-			Name:  "testGauge",
+			Name:  "alloc",
 			Value: &gaugeVal,
 		},
 	})
@@ -123,11 +117,11 @@ func TestHandler_Update(t *testing.T) {
 
 func ExampleHandler_UpdatePostJSON() {
 	// Конструктор структуры тела запроса
-	val := int64(200)
+	val := float64(3251325234)
 	data := &models.Data{
-		Type:  "counter",
-		Name:  "testCounter",
-		Delta: &val,
+		Type:  "gauge",
+		Name:  "alloc",
+		Value: &val,
 	}
 
 	// Сериализация в JSON
@@ -164,18 +158,12 @@ func ExampleHandler_UpdatePostJSON() {
 
 func ExampleHandler_UpdatesPostJSON() {
 	// Конструктор структуры тела запроса
-	gaugeVal := float64(200)
-	counterVal := int64(200)
+	gaugeVal := float64(3251325234)
 	data := []*models.Data{
 		{
 			Type:  "gauge",
-			Name:  "testGauge",
+			Name:  "alloc",
 			Value: &gaugeVal,
-		},
-		{
-			Type:  "counter",
-			Name:  "testCounter",
-			Delta: &counterVal,
 		},
 	}
 
@@ -218,7 +206,7 @@ func ExampleHandler_UpdatePost() {
 		"http://localhost:8080/update",
 		nil)
 	request.Header.Add("Content-Type", "text/plain")
-	request.SetPathValue("type", "counter")
+	request.SetPathValue("type", "gauge")
 	request.SetPathValue("name", "alloc")
 	request.SetPathValue("value", "3251325234")
 
@@ -244,8 +232,8 @@ func ExampleHandler_UpdatePost() {
 func ExampleHandler_ValueGetJSON() {
 	// Конструктор структуры тела запроса
 	data := &models.Data{
-		Type: "counter",
-		Name: "testCounter",
+		Type: "gauge",
+		Name: "alloc",
 	}
 
 	// Сериализация в JSON
@@ -277,7 +265,7 @@ func ExampleHandler_ValueGetJSON() {
 
 	// Output:
 	// 200
-	// {"type":"counter","id":"testCounter","delta":500}
+	// {"type":"gauge","id":"alloc","value":3251325234}
 }
 
 func ExampleHandler_ValueGet() {
@@ -287,8 +275,8 @@ func ExampleHandler_ValueGet() {
 		"http://localhost:8080/value",
 		nil)
 	request.Header.Add("Content-Type", "text/plain")
-	request.SetPathValue("type", "counter")
-	request.SetPathValue("name", "testCounter")
+	request.SetPathValue("type", "gauge")
+	request.SetPathValue("name", "alloc")
 
 	// Создание интерфейса записи
 	w := httptest.NewRecorder()
@@ -309,7 +297,7 @@ func ExampleHandler_ValueGet() {
 
 	// Output:
 	// 200
-	// 500
+	// 3251325234
 }
 
 func ExampleHandler_IndexGet() {
@@ -338,5 +326,5 @@ func ExampleHandler_IndexGet() {
 
 	// Output:
 	// 200
-	// [{"type":"counter","id":"testCounter","delta":500},{"type":"gauge","id":"testGauge","value":200},{"type":"counter","id":"alloc","delta":6502650468}]
+	// [{"type":"gauge","id":"alloc","value":3251325234}]
 }
