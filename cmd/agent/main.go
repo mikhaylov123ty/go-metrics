@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
-	
+
 	_ "net/http/pprof"
 
 	"metrics/internal/client"
@@ -23,5 +23,7 @@ func main() {
 	// Запуск агента
 	go agentInstance.Run()
 
-	http.ListenAndServe(":30012", nil)
+	if err = http.ListenAndServe(":30012", nil); err != nil {
+		log.Fatal("HTTP Server Error:", err)
+	}
 }

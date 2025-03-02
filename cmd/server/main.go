@@ -23,13 +23,19 @@ func main() {
 	var storageCommands *api.StorageCommands
 	switch {
 	case cfg.DB.Address != "":
-		psqlStorage, err := psql.NewPSQLDataBase(
+		var psqlStorage *psql.DataBase
+		psqlStorage, err = psql.NewPSQLDataBase(
 			cfg.DB.Address,
 		)
 		if err != nil {
 			log.Fatal("Build Server Storage Connection Error:", err)
 		}
-		defer psqlStorage.Instance.Close()
+
+		defer func() {
+			if err = psqlStorage.Instance.Close(); err != nil {
+				log.Println("Build Server Storage Close Instance Error:", err)
+			}
+		}()
 
 		if err = psqlStorage.BootStrap(cfg.DB.Address); err != nil {
 			log.Fatal("Build Server Storage Bootstrap Error:", err)

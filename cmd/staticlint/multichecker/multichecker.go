@@ -17,6 +17,8 @@ import (
 	"honnef.co/go/tools/simple"
 	"honnef.co/go/tools/staticcheck"
 	"honnef.co/go/tools/stylecheck"
+
+	"mycheck/analyzer/osexit"
 )
 
 // ConfigData описывает структуру файла конфигурации.
@@ -24,6 +26,7 @@ type ConfigData struct {
 	Staticcheck []string `json:"staticChecks"`
 }
 
+// TODO add relative path
 // Run - запускает статический анализ кода проекта
 func Run() error {
 	cfgData, err := os.ReadFile("./cmd/staticlint/config.json")
@@ -44,6 +47,7 @@ func Run() error {
 		shadow.Analyzer,
 		structtag.Analyzer,
 		errcheck.Analyzer,
+		osexit.Analyzer,
 	)
 
 	multichecker.Main(

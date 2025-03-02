@@ -1,6 +1,6 @@
 module mycheck
 
-go 1.23.2
+go 1.23
 
 require (
 	github.com/kisielk/errcheck v1.9.0

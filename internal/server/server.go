@@ -158,7 +158,12 @@ func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 		if err != nil {
 			s.logger.Error("gZip encode error:", err)
 		}
-		defer gz.Close()
+
+		defer func() {
+			if err = gz.Close(); err != nil {
+				log.Println("gZip middleware: failed close gZip writer", err)
+			}
+		}()
 
 		s.logger.Debugln("compressing request with gzip")
 
@@ -171,7 +176,6 @@ func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 // middleware для эндпоинтов для хеширования и подписи
 func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
 		//Декодирование хедера
 		requestHeader, err := hex.DecodeString(r.Header.Get("HashSHA256"))
 		if err != nil {
@@ -187,15 +191,22 @@ func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 
 		// Проверка наличия ключа из флага и в запросе
 		if len(s.key) > 0 && len(requestHeader) > 0 {
+			var body []byte
 			// Чтение тела запроса, закрытие и копирование
 			// для передачи далее по пайплайну
-			body, err := io.ReadAll(r.Body)
+			body, err = io.ReadAll(r.Body)
 			if err != nil {
 				s.logger.Error(err)
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			r.Body.Close()
+
+			defer func() {
+				if err = r.Body.Close(); err != nil {
+					log.Println("hash middleware: failed close request body", err)
+				}
+			}()
+
 			r.Body = io.NopCloser(bytes.NewBuffer(body))
 
 			// Вычисление и валидация хэша
