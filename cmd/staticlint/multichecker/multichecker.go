@@ -1,4 +1,4 @@
-// Модуль multichecker реализаует статический анализ кода
+// Модуль multichecker производит статический анализ кода
 package multichecker
 
 import (
@@ -21,15 +21,20 @@ import (
 	"mycheck/analyzer/osexit"
 )
 
+// configPath - задает путь до файла конфигурации из корневой папки
+// переделать на флаг
+const configPath = "./cmd/staticlint/config.json"
+
 // ConfigData описывает структуру файла конфигурации.
 type ConfigData struct {
 	Staticcheck []string `json:"staticChecks"`
 }
 
-// TODO add relative path
+// TODO add config builder
+
 // Run - запускает статический анализ кода проекта
 func Run() error {
-	cfgData, err := os.ReadFile("./cmd/staticlint/config.json")
+	cfgData, err := os.ReadFile(configPath)
 	if err != nil {
 		return err
 	}
@@ -56,7 +61,7 @@ func Run() error {
 	return nil
 }
 
-// parseChecks метод структуры ConfigData для парсинга конфигурации инструментов анализа
+// parseChecks метод парсинга конфигурации инструментов анализа
 func (c *ConfigData) parseChecks() []*analysis.Analyzer {
 	var res []*analysis.Analyzer
 	for _, check := range c.Staticcheck {

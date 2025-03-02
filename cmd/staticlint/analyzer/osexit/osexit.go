@@ -1,3 +1,6 @@
+// Модуль osexit реализует поиск вызова функции os.Exit
+// Критерий для поиска - функция main в пакете main.
+// Результат поиска - запрет использования прямого вызова os.Exit
 package osexit
 
 import (
@@ -6,13 +9,14 @@ import (
 	"golang.org/x/tools/go/analysis"
 )
 
-// Analyzer - переменная
+// Analyzer описывает функцию анализа
 var Analyzer = &analysis.Analyzer{
 	Name: "osExitCheck",
 	Doc:  "reports usage of osExit in main functions of main packages",
 	Run:  run,
 }
 
+// run запускает ast анализ исходного кода
 func run(pass *analysis.Pass) (interface{}, error) {
 	funcDecl := func(x *ast.FuncDecl) {
 		for _, stmt := range x.Body.List {
