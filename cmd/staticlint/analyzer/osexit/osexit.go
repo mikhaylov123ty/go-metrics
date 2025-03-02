@@ -2,10 +2,11 @@ package osexit
 
 import (
 	"go/ast"
-	
+
 	"golang.org/x/tools/go/analysis"
 )
 
+// Analyzer - переменная
 var Analyzer = &analysis.Analyzer{
 	Name: "osExitCheck",
 	Doc:  "reports usage of osExit in main functions of main packages",
