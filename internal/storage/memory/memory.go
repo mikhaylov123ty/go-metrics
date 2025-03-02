@@ -3,22 +3,22 @@ package memory
 import (
 	"sync"
 
-	"metrics/internal/storage"
+	"metrics/internal/models"
 )
 
-// Структура хранилища
+// MemoryStorage - структура хранилища памяти
 type MemoryStorage struct {
 	mu      sync.RWMutex
-	metrics map[string]*storage.Data
+	metrics map[string]*models.Data
 }
 
-// Реализация интерфеса
+// NewMemoryStorage - конструктор хранилища
 func NewMemoryStorage() *MemoryStorage {
-	return &MemoryStorage{metrics: make(map[string]*storage.Data)}
+	return &MemoryStorage{metrics: make(map[string]*models.Data)}
 }
 
-// Метод получения записи из хранилища по id
-func (m *MemoryStorage) Read(id string) (*storage.Data, error) {
+// Read получает метрику из хранилища по названию
+func (m *MemoryStorage) Read(id string) (*models.Data, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	res, ok := m.metrics[id]
@@ -29,11 +29,11 @@ func (m *MemoryStorage) Read(id string) (*storage.Data, error) {
 	return res, nil
 }
 
-// Метод получения записей из хранилища
-func (m *MemoryStorage) ReadAll() ([]*storage.Data, error) {
+// ReadAll получает все метрики из хранилища
+func (m *MemoryStorage) ReadAll() ([]*models.Data, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	res := make([]*storage.Data, 0)
+	res := make([]*models.Data, 0)
 	for _, data := range m.metrics {
 		res = append(res, data)
 	}
@@ -41,8 +41,8 @@ func (m *MemoryStorage) ReadAll() ([]*storage.Data, error) {
 	return res, nil
 }
 
-// Метод создания или обновления существующей записи в хранилище
-func (m *MemoryStorage) Update(query *storage.Data) error {
+// Update создает новую или обновляет существующую запись метрики в хранилище
+func (m *MemoryStorage) Update(query *models.Data) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -55,8 +55,8 @@ func (m *MemoryStorage) Update(query *storage.Data) error {
 	return nil
 }
 
-// Метод создания или обновление существующих записей в хранилище
-func (m *MemoryStorage) UpdateBatch(queries []*storage.Data) error {
+// UpdateBatch создает новые или обновляет существующие записи метрики в хранилище
+func (m *MemoryStorage) UpdateBatch(queries []*models.Data) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

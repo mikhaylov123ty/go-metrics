@@ -1,3 +1,4 @@
+// Модуль server реализует эндпоинты для взаимодействия и хранения метрик
 package server
 
 import (
@@ -5,24 +6,22 @@ import (
 	"compress/gzip"
 	"crypto/hmac"
 	"encoding/hex"
-	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"metrics/internal/server/api"
 	"metrics/internal/server/config"
-	"metrics/internal/storage"
+	"metrics/internal/server/metrics"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/sirupsen/logrus"
 )
 
-// Структура сервера
+// Server - структура сервера
 type Server struct {
 	services        services
 	logger          *logrus.Logger
@@ -32,15 +31,19 @@ type Server struct {
 	key             string
 }
 
+// services - структура команд БД и файла с бэкапом
 type services struct {
-	storageCommands *api.StorageCommands
+	storageCommands    *api.StorageCommands
+	metricsFileStorage *metrics.MetricsFileStorage
 }
 
-// Конструктор инстанса сервера
-func New(storageCommands *api.StorageCommands, logger *logrus.Logger, cfg *config.ServerConfig) *Server {
+// New - конструктор инстанса сервера
+func New(storageCommands *api.StorageCommands, metricsFileStorage *metrics.MetricsFileStorage, logger *logrus.Logger, cfg *config.ServerConfig) *Server {
 	return &Server{
 		services: services{
-			storageCommands: storageCommands},
+			storageCommands:    storageCommands,
+			metricsFileStorage: metricsFileStorage,
+		},
 		logger:          logger,
 		storeInterval:   cfg.FileStorage.StoreInterval,
 		fileStoragePath: cfg.FileStorage.FileStoragePath,
@@ -49,13 +52,14 @@ func New(storageCommands *api.StorageCommands, logger *logrus.Logger, cfg *confi
 	}
 }
 
-// Метод запуска сервера
+// Start запускает сервера
 func (s *Server) Start(address string) {
 	// Инициализация даты из файла
 	if s.restore {
-		if err := s.initMetricsFromFile(); err != nil {
+		if err := s.services.metricsFileStorage.InitMetricsFromFile(); err != nil {
 			s.logger.Fatal("error restore metrics from file: ", err)
 		}
+		s.logger.Infof("metrics file storage restored")
 	}
 
 	// Запуск горутины сохранения метрик с интервалом
@@ -63,7 +67,7 @@ func (s *Server) Start(address string) {
 		for {
 			time.Sleep(time.Duration(s.storeInterval) * time.Second)
 
-			if err := s.storeMetrics(); err != nil {
+			if err := s.services.metricsFileStorage.StoreMetrics(); err != nil {
 				s.logger.Errorf("store metrics: failed read metrics: %s", err.Error())
 			}
 		}
@@ -84,6 +88,9 @@ func (s *Server) Start(address string) {
 
 // Наполнение сервера методами хендлера
 func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
+	// /debug profiler
+	router.Mount("/debug", middleware.Profiler())
+
 	// /update
 	router.Route("/update", func(r chi.Router) {
 		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(handler.UpdatePostJSON))))
@@ -204,79 +211,4 @@ func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 
 		next(hashWriter, r)
 	}
-}
-
-// Метод записи метрик в файл
-func (s *Server) storeMetrics() error {
-	// Чтение всех метрик из хранилища
-	metrics, err := s.services.storageCommands.ReadAll()
-	if err != nil {
-		return fmt.Errorf("read metrics: %w", err)
-	}
-
-	// Проверка наличия метрик
-	if len(metrics) == 0 {
-		s.logger.Infof("no metrics found")
-		return nil
-	}
-
-	// Сериализация метрик
-	data := []byte{}
-	metricsLength := len(metrics) - 1
-	for i, v := range metrics {
-		record, err := json.Marshal(v)
-		if err != nil {
-			return fmt.Errorf("marshal metrics: %w", err)
-		}
-		data = append(data, record...)
-		if i < metricsLength {
-			data = append(data, '\n')
-			i++
-		}
-	}
-
-	s.logger.Debugf("data:%s:endData", string(data))
-
-	// Создание/обновление файла
-	storageFile, err := os.Create(s.fileStoragePath)
-	if err != nil {
-		return fmt.Errorf("error create file: %w", err)
-	}
-
-	// Запись даты в файл
-	if _, err = storageFile.Write(data); err != nil {
-		return fmt.Errorf("write metrics: %w", err)
-	}
-	return nil
-}
-
-// Метод восстановления данных метрик из файла
-func (s *Server) initMetricsFromFile() error {
-	fileData, err := os.ReadFile(s.fileStoragePath)
-	if err != nil {
-		s.logger.Infof("no metrics file found, skipping restore")
-		return nil
-	}
-
-	// Проверка, если файл пустой
-	if len(fileData) < 1 {
-		s.logger.Infof("no metrics found in file, skipping restore")
-		return nil
-	}
-
-	// Разбивка по линиям файла
-	lines := strings.Split(string(fileData), "\n")
-	for _, line := range lines {
-		storageData := &storage.Data{}
-		if err = json.Unmarshal([]byte(line), storageData); err != nil {
-			return fmt.Errorf("unmarshal metrics: %w", err)
-		}
-
-		// Забись в хранилище
-		if err = s.services.storageCommands.Update(storageData); err != nil {
-			return fmt.Errorf("update metrics: %w", err)
-		}
-	}
-
-	return nil
 }

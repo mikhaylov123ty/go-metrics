@@ -2,6 +2,9 @@ package main
 
 import (
 	"log"
+	"net/http"
+	
+	_ "net/http/pprof"
 
 	"metrics/internal/client"
 	"metrics/internal/client/config"
@@ -18,5 +21,7 @@ func main() {
 	agentInstance := client.NewAgent(cfg)
 
 	// Запуск агента
-	agentInstance.Run()
+	go agentInstance.Run()
+
+	http.ListenAndServe(":30012", nil)
 }

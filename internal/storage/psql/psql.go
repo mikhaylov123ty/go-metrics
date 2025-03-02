@@ -5,26 +5,26 @@ import (
 	"errors"
 	"fmt"
 
-	"metrics/internal/storage"
-	"metrics/pkg"
-
 	sq "github.com/Masterminds/squirrel"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/jackc/pgx/v5/stdlib"
+
+	"metrics/internal/models"
+	"metrics/pkg"
 )
 
 const (
 	migrateFilesPath = "file://./internal/storage/psql/migrations"
 )
 
-// Структура хранилища
+// DataBase - структура инстанса хранилища
 type DataBase struct {
 	Instance *sql.DB
 }
 
-// Конструктор PostgreSQL
+// NewPSQLDataBase - конструктор PostgreSQL
 func NewPSQLDataBase(connectionString string) (*DataBase, error) {
 	db, err := sql.Open("pgx", connectionString)
 	if err != nil {
@@ -38,7 +38,7 @@ func NewPSQLDataBase(connectionString string) (*DataBase, error) {
 	return &DataBase{Instance: db}, nil
 }
 
-// Метод подготовки БД
+// BootStrap подготовка БД
 func (db *DataBase) BootStrap(connectionString string) error {
 	// Создание новой миграции
 	migration, err := migrate.New(migrateFilesPath, connectionString)
@@ -54,9 +54,9 @@ func (db *DataBase) BootStrap(connectionString string) error {
 	return nil
 }
 
-// Метод получения записи из хранилища по id
-func (db *DataBase) Read(name string) (*storage.Data, error) {
-	res := storage.Data{}
+// Read получает метрику из хранилища по названию
+func (db *DataBase) Read(name string) (*models.Data, error) {
+	res := models.Data{}
 
 	// Формирование строки запроса и аргументов
 	query, args, err := sq.Select("type, name, value, delta").
@@ -80,9 +80,9 @@ func (db *DataBase) Read(name string) (*storage.Data, error) {
 	return &res, nil
 }
 
-// Метод получения записей из хранилища
-func (db *DataBase) ReadAll() ([]*storage.Data, error) {
-	res := make([]*storage.Data, 0)
+// ReadAll получает все метрики из хранилища
+func (db *DataBase) ReadAll() ([]*models.Data, error) {
+	res := make([]*models.Data, 0)
 
 	// Формирование строки запроса и аргументов
 	query, args, err := sq.Select("type, name, value, delta").
@@ -104,7 +104,7 @@ func (db *DataBase) ReadAll() ([]*storage.Data, error) {
 
 	// Сканирование строк
 	for rows.Next() {
-		row := storage.Data{}
+		row := models.Data{}
 		if err = rows.Scan(&row.Type, &row.Name, &row.Value, &row.Delta); err != nil {
 			return nil, fmt.Errorf("scanning row: %w", err)
 		}
@@ -115,13 +115,14 @@ func (db *DataBase) ReadAll() ([]*storage.Data, error) {
 	return res, nil
 }
 
-// Метод создания или обновления существующей записи в хранилище
-func (db *DataBase) Update(query *storage.Data) error {
+// Update создает новую или обновляет существующую запись метрики в хранилище
+func (db *DataBase) Update(query *models.Data) error {
 	// Начало транзакции
 	tx, err := db.Instance.Begin()
 	if err != nil {
 		return fmt.Errorf("starting transaction: %w", err)
 	}
+	defer tx.Rollback()
 
 	// Выполнение запроса
 	if _, err = tx.Exec(`
@@ -135,7 +136,6 @@ func (db *DataBase) Update(query *storage.Data) error {
 		query.Type,
 		query.Value,
 		query.Delta); err != nil {
-		tx.Rollback()
 		return fmt.Errorf("updating metrics: %w", err)
 	}
 
@@ -143,8 +143,8 @@ func (db *DataBase) Update(query *storage.Data) error {
 	return tx.Commit()
 }
 
-// Метод создания или обновление существующих записей в хранилище
-func (db *DataBase) UpdateBatch(queries []*storage.Data) error {
+// UpdateBatch создает новые или обновляет существующие записи метрики в хранилище
+func (db *DataBase) UpdateBatch(queries []*models.Data) error {
 	// Начало транзакции
 	tx, err := db.Instance.Begin()
 	if err != nil {
@@ -181,7 +181,7 @@ func (db *DataBase) UpdateBatch(queries []*storage.Data) error {
 	return tx.Commit()
 }
 
-// Метод проверки доступности БД
+// Ping проверяет доступность БД
 func (db *DataBase) Ping() error {
 	if err := pkg.AnyFunc(db.Instance.Ping).WithRetry(); err != nil {
 		return err

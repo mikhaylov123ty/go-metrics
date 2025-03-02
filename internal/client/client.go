@@ -1,3 +1,4 @@
+// Модуль client реализует бизнес логику агента сбора метрик и передачу на сервер
 package client
 
 import (
@@ -5,55 +6,60 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
-	"sync"
+	"syscall"
 	"time"
 
-	"metrics/internal/client/config"
-	"metrics/internal/storage"
-
 	"github.com/go-resty/resty/v2"
+
+	"metrics/internal/client/collector"
+	"metrics/internal/client/config"
+	"metrics/internal/models"
 )
 
-// Алиасы ручек
 const (
 	singleHandlerPath = "/update"
 	batchHandlerPath  = "/updates"
+
+	attempts = 3
+	interval = 2 * time.Second
 )
 
-// Структура агента
+// Agent - структура агента
 type Agent struct {
 	baseURL        string
 	client         *resty.Client
 	pollInterval   int
 	reportInterval int
-	metrics        []*storage.Data
-	statsBuf       statsBuf
+	metrics        []*models.Data
+	statsBuf       collector.StatsBuf
 	key            string
 	rateLimit      int
 }
 
-// Конструктор агента
+// NewAgent - конструктор агента
 func NewAgent(cfg *config.AgentConfig) *Agent {
 	return &Agent{
 		baseURL:        "http://" + cfg.String(),
 		client:         resty.New(),
 		pollInterval:   cfg.PollInterval,
 		reportInterval: cfg.ReportInterval,
-		statsBuf:       collectMetrics(&stats{mu: sync.RWMutex{}, data: make(map[string]interface{})}),
-		key:            cfg.Key,
-		rateLimit:      cfg.RateLimit,
+		statsBuf: collector.CollectMetrics(&collector.Stats{
+			Data: make(map[string]interface{})}),
+		key:       cfg.Key,
+		rateLimit: cfg.RateLimit,
 	}
 }
 
-// Запуск агента
+// Run запускает агента
 func (a *Agent) Run() {
 	// Запуск горутины по сбору метрик с интервалом pollInterval
 	go func() {
 		for {
 			time.Sleep(time.Duration(a.pollInterval) * time.Second)
-			a.metrics = a.statsBuf().buildMetrics()
+			a.metrics = a.statsBuf().BuildMetrics()
 		}
 	}()
 
@@ -148,4 +154,33 @@ func (a *Agent) withSign(request *resty.Request) *resty.Request {
 	}
 
 	return request
+}
+
+// Метод повтора функции отправки метрик на сервер
+func withRetry(request *resty.Request, URL string, w int) (*resty.Response, error) {
+	var resp *resty.Response
+	var err error
+	wait := 1 * time.Second
+
+	// Попытки выполнения запроса и возврат при успешном выполнении
+	for range attempts {
+		resp, err = request.Post(URL)
+		if err == nil {
+			return resp, nil
+		}
+
+		// Проверка ошибки для сценария недоступности сервера
+		switch {
+		case errors.Is(err, syscall.ECONNREFUSED):
+			log.Printf("Worker: %d, retrying after error: %s\n", w, err.Error())
+			time.Sleep(wait)
+			wait += interval
+
+		// Возврат ошибки по умолчанию
+		default:
+			return nil, err
+		}
+	}
+
+	return nil, err
 }

@@ -1,3 +1,4 @@
+// Модуль api описывает эндпоинты
 package api
 
 import (
@@ -7,37 +8,37 @@ import (
 	"net/http"
 	"strconv"
 
-	"metrics/internal/storage"
+	"metrics/internal/models"
 )
 
-// Структура хендлера
+//TODO разбить по файлам
+
+// Handler - структура хендлера
 type Handler struct {
 	storageCommands *StorageCommands
 }
 
-// Комманды хендлера
+// StorageCommands - команды для взаимодействия с хранилищем
 type StorageCommands struct {
-	read
-	readAll
-	update
-	updateBatch
-	ping
+	dataReader
+	dataUpdater
+	pinger
 }
 
-// Интерфейсы хендлера
-type read interface {
-	Read(string) (*storage.Data, error)
+// dataReader - интерфейс хендлера для чтения из базы
+type dataReader interface {
+	Read(string) (*models.Data, error)
+	ReadAll() ([]*models.Data, error)
 }
-type readAll interface {
-	ReadAll() ([]*storage.Data, error)
+
+// dataUpdater - интерфейс хендлера для записи в базу
+type dataUpdater interface {
+	Update(*models.Data) error
+	UpdateBatch([]*models.Data) error
 }
-type update interface {
-	Update(*storage.Data) error
-}
-type updateBatch interface {
-	UpdateBatch([]*storage.Data) error
-}
-type ping interface {
+
+// pinger - интерфейс хендлера для проверки базы
+type pinger interface {
 	Ping() error
 }
 
@@ -48,19 +49,17 @@ func NewHandler(storageCommands *StorageCommands) *Handler {
 	}
 }
 
-// Конструктор  сервиса, т.к. размещение инетрфейсов по месту использования
-// предполгает, что они неимпортируемые
-func NewStorageService(read read, readAll readAll, update update, updateBatch updateBatch, ping ping) *StorageCommands {
+// NewStorageService - конструктор  сервиса, т.к. размещение инетрфейсов по месту использования
+// предполгает, что они неэкспортируемые
+func NewStorageService(dataReader dataReader, dataUpdater dataUpdater, ping pinger) *StorageCommands {
 	return &StorageCommands{
-		read:        read,
-		readAll:     readAll,
-		update:      update,
-		updateBatch: updateBatch,
-		ping:        ping,
+		dataReader:  dataReader,
+		dataUpdater: dataUpdater,
+		pinger:      ping,
 	}
 }
 
-// Метод ручки "POST /update с телом JSON"
+// UpdatePostJSON - метод ручки "POST /update с телом JSON"
 func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	var err error
 
@@ -80,7 +79,7 @@ func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
 	// Десериализация тела запроса
-	storageData := storage.Data{}
+	storageData := models.Data{}
 	if err = json.Unmarshal(body, &storageData); err != nil {
 		log.Println("UpdatePostJSON: failed unmarshall request body", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -105,7 +104,7 @@ func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// Метод ручки "POST /updates с телом JSON" (Batches)
+// UpdatesPostJSON - метод ручки "POST /updates с телом JSON" (Batches)
 func (h *Handler) UpdatesPostJSON(w http.ResponseWriter, req *http.Request) {
 	var err error
 
@@ -125,7 +124,7 @@ func (h *Handler) UpdatesPostJSON(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
 	// Десериализация тела запроса
-	storageData := []*storage.Data{}
+	storageData := []*models.Data{}
 	if err = json.Unmarshal(body, &storageData); err != nil {
 		log.Println("UpdatesPostJSON: failed unmarshall request body", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -159,12 +158,12 @@ func (h *Handler) UpdatesPostJSON(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// Метод ручки "POST /update/{type}/{name}/{value}"
+// UpdatePost - метод ручки "POST /update/{type}/{name}/{value}"
 func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	var err error
 
 	// Конструктор даты хранилища
-	storageData := &storage.Data{
+	storageData := &models.Data{
 		Type: req.PathValue("type"),
 		Name: req.PathValue("name"),
 	}
@@ -214,7 +213,7 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// Метод ручки "POST /value"
+// ValueGetJSON - метод ручки "POST /value"
 func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	// Проверка хедера
 	if req.Header.Get("Content-Type") != "application/json" {
@@ -232,7 +231,7 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
 	// Десериализация тела
-	storageData := storage.Data{}
+	storageData := models.Data{}
 	if err = json.Unmarshal(body, &storageData); err != nil {
 		log.Println("ValueGetJSON: failed unmarshall request body", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -268,7 +267,7 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// Метод ручки "GET /value/{type}/{name}"
+// ValueGet - метод ручки "GET /value/{type}/{name}"
 func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 	var err error
 
@@ -318,7 +317,7 @@ func (h *Handler) ValueGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// Метод ручки "GET /"
+// IndexGet - метод ручки "GET /"
 func (h *Handler) IndexGet(w http.ResponseWriter, req *http.Request) {
 	// Получение всех записей
 	data, err := h.storageCommands.ReadAll()
@@ -348,9 +347,9 @@ func (h *Handler) IndexGet(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-// Метод ручки "GET /ping"
+// PingGet - метод ручки "GET /ping"
 func (h *Handler) PingGet(w http.ResponseWriter, req *http.Request) {
-	if h.storageCommands.ping == nil {
+	if h.storageCommands.pinger == nil {
 		log.Println("working from memory")
 		w.WriteHeader(http.StatusOK)
 		return
