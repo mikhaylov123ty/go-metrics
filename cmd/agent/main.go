@@ -1,16 +1,27 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
-	
+
 	_ "net/http/pprof"
 
 	"metrics/internal/client"
 	"metrics/internal/client/config"
 )
 
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
+)
+
 func main() {
+	fmt.Printf("Agent Build Version: %s\n", buildVersion)
+	fmt.Printf("Agent Build Date: %s\n", buildDate)
+	fmt.Printf("Agent Build Commit: %s\n", buildCommit)
+
 	// Инициализация флагов агента
 	cfg, err := config.New()
 	if err != nil {
@@ -23,5 +34,7 @@ func main() {
 	// Запуск агента
 	go agentInstance.Run()
 
-	http.ListenAndServe(":30012", nil)
+	if err = http.ListenAndServe(":30012", nil); err != nil {
+		log.Fatal("HTTP Server Error:", err)
+	}
 }

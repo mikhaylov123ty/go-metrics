@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"log"
-
 	"metrics/internal/server"
 	"metrics/internal/server/api"
 	"metrics/internal/server/config"
@@ -12,7 +12,17 @@ import (
 	"metrics/pkg/logger"
 )
 
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
+)
+
 func main() {
+	fmt.Printf("Server Build Version: %s\n", buildVersion)
+	fmt.Printf("Server Build Date: %s\n", buildDate)
+	fmt.Printf("Server Build Commit: %s\n", buildCommit)
+
 	// Инициализация конфигурации сервера
 	cfg, err := config.New()
 	if err != nil {
@@ -23,13 +33,19 @@ func main() {
 	var storageCommands *api.StorageCommands
 	switch {
 	case cfg.DB.Address != "":
-		psqlStorage, err := psql.NewPSQLDataBase(
+		var psqlStorage *psql.DataBase
+		psqlStorage, err = psql.NewPSQLDataBase(
 			cfg.DB.Address,
 		)
 		if err != nil {
 			log.Fatal("Build Server Storage Connection Error:", err)
 		}
-		defer psqlStorage.Instance.Close()
+
+		defer func() {
+			if err = psqlStorage.Instance.Close(); err != nil {
+				log.Println("Build Server Storage Close Instance Error:", err)
+			}
+		}()
 
 		if err = psqlStorage.BootStrap(cfg.DB.Address); err != nil {
 			log.Fatal("Build Server Storage Bootstrap Error:", err)

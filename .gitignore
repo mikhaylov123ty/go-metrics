@@ -16,7 +16,6 @@ cmd/agent/main
 cmd/agent/agent
 cmd/server/main
 cmd/server/server
-Makefile
 
 # Dependency directories (remove the comment below to include it)
 vendor/
@@ -27,6 +26,7 @@ vendor/
 
 # Local test
 metricstest-darwin-arm64
+temp*
 
 # Mac store files
 .DS_Store

@@ -76,7 +76,12 @@ func (h *Handler) UpdatePostJSON(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	defer req.Body.Close()
+
+	defer func() {
+		if err = req.Body.Close(); err != nil {
+			log.Println("UpdatePostJSON: failed close request body", err)
+		}
+	}()
 
 	// Десериализация тела запроса
 	storageData := models.Data{}
@@ -121,7 +126,12 @@ func (h *Handler) UpdatesPostJSON(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	defer req.Body.Close()
+
+	defer func() {
+		if err = req.Body.Close(); err != nil {
+			log.Println("UpdatesPostJSON: failed close request body", err)
+		}
+	}()
 
 	// Десериализация тела запроса
 	storageData := []*models.Data{}
@@ -160,8 +170,6 @@ func (h *Handler) UpdatesPostJSON(w http.ResponseWriter, req *http.Request) {
 
 // UpdatePost - метод ручки "POST /update/{type}/{name}/{value}"
 func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
-	var err error
-
 	// Конструктор даты хранилища
 	storageData := &models.Data{
 		Type: req.PathValue("type"),
@@ -203,7 +211,7 @@ func (h *Handler) UpdatePost(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Обновление или сохранение новой записи в хранилище
-	if err = h.storageCommands.Update(storageData); err != nil {
+	if err := h.storageCommands.Update(storageData); err != nil {
 		log.Println("UpdatePost: update handler error:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -228,7 +236,12 @@ func (h *Handler) ValueGetJSON(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	defer req.Body.Close()
+
+	defer func() {
+		if err = req.Body.Close(); err != nil {
+			log.Println("ValueGetJSON: failed close request body", err)
+		}
+	}()
 
 	// Десериализация тела
 	storageData := models.Data{}

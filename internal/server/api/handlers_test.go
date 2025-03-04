@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http/httptest"
 	"testing"
 
@@ -24,13 +25,15 @@ func init() {
 	}
 
 	gaugeVal := float64(3251325234)
-	newMemStorage.UpdateBatch([]*models.Data{
+	if err := newMemStorage.UpdateBatch([]*models.Data{
 		{
 			Type:  "gauge",
 			Name:  "alloc",
 			Value: &gaugeVal,
 		},
-	})
+	}); err != nil {
+		panic(err)
+	}
 }
 
 func TestHandler_Update(t *testing.T) {
@@ -108,7 +111,12 @@ func TestHandler_Update(t *testing.T) {
 			handler.UpdatePost(w, request)
 
 			res := w.Result()
-			defer res.Body.Close()
+
+			defer func() {
+				if err := res.Body.Close(); err != nil {
+					log.Println("error closing response body", err)
+				}
+			}()
 
 			assert.Equal(t, tt.want.code, res.StatusCode, "Codes are not equal")
 		})
@@ -148,7 +156,12 @@ func ExampleHandler_UpdatePostJSON() {
 
 	// Получение ответа
 	res := w.Result()
-	defer res.Body.Close()
+
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			log.Println("error closing response body", err)
+		}
+	}()
 
 	fmt.Println(res.StatusCode)
 
@@ -191,7 +204,12 @@ func ExampleHandler_UpdatesPostJSON() {
 
 	// Получение ответа
 	res := w.Result()
-	defer res.Body.Close()
+
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			log.Println("error closing response body", err)
+		}
+	}()
 
 	fmt.Println(res.StatusCode)
 
@@ -221,7 +239,12 @@ func ExampleHandler_UpdatePost() {
 
 	// Получение ответа
 	res := w.Result()
-	defer res.Body.Close()
+
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			log.Println("error closing response body", err)
+		}
+	}()
 
 	fmt.Println(res.StatusCode)
 
@@ -257,7 +280,13 @@ func ExampleHandler_ValueGetJSON() {
 
 	// Получение ответа
 	res := w.Result()
-	defer res.Body.Close()
+
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			log.Println("error closing response body", err)
+		}
+	}()
+
 	resBody, _ := io.ReadAll(res.Body)
 
 	fmt.Println(res.StatusCode)
@@ -289,7 +318,13 @@ func ExampleHandler_ValueGet() {
 
 	// Получение ответа
 	res := w.Result()
-	defer res.Body.Close()
+
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			log.Println("error closing response body", err)
+		}
+	}()
+
 	resBody, _ := io.ReadAll(res.Body)
 
 	fmt.Println(res.StatusCode)
@@ -318,7 +353,13 @@ func ExampleHandler_IndexGet() {
 
 	// Получение ответа
 	res := w.Result()
-	defer res.Body.Close()
+
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			log.Println("error closing response body", err)
+		}
+	}()
+	
 	resBody, _ := io.ReadAll(res.Body)
 
 	fmt.Println(res.StatusCode)
