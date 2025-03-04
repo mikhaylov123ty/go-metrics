@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -10,7 +11,17 @@ import (
 	"metrics/internal/client/config"
 )
 
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
+)
+
 func main() {
+	fmt.Printf("Agent Build Version: %s\n", buildVersion)
+	fmt.Printf("Agent Build Date: %s\n", buildDate)
+	fmt.Printf("Agent Build Commit: %s\n", buildCommit)
+
 	// Инициализация флагов агента
 	cfg, err := config.New()
 	if err != nil {

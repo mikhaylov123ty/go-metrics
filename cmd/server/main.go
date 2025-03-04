@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"log"
-
 	"metrics/internal/server"
 	"metrics/internal/server/api"
 	"metrics/internal/server/config"
@@ -12,7 +12,17 @@ import (
 	"metrics/pkg/logger"
 )
 
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
+)
+
 func main() {
+	fmt.Printf("Server Build Version: %s\n", buildVersion)
+	fmt.Printf("Server Build Date: %s\n", buildDate)
+	fmt.Printf("Server Build Commit: %s\n", buildCommit)
+
 	// Инициализация конфигурации сервера
 	cfg, err := config.New()
 	if err != nil {

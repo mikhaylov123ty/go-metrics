@@ -5,6 +5,7 @@ package osexit
 
 import (
 	"go/ast"
+	"strings"
 
 	"golang.org/x/tools/go/analysis"
 )
@@ -36,17 +37,29 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 	for _, file := range pass.Files {
 		if file.Name.Name == "main" {
-			ast.Inspect(file, func(node ast.Node) bool {
-				switch n := node.(type) {
-				case *ast.FuncDecl:
-					if n.Name.Name == "main" {
-						funcDecl(n)
+			if !contains(file.Comments, "DO NOT EDIT") {
+				ast.Inspect(file, func(node ast.Node) bool {
+					switch n := node.(type) {
+					case *ast.FuncDecl:
+						if n.Name.Name == "main" {
+							funcDecl(n)
+						}
 					}
-				}
-				return true
-			})
+					return true
+				})
+			}
 		}
 	}
 
 	return nil, nil
+}
+
+func contains(comments []*ast.CommentGroup, s string) bool {
+	for _, comment := range comments {
+		if strings.Contains(comment.Text(), s) {
+			return true
+		}
+	}
+
+	return false
 }
