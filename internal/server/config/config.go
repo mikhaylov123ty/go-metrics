@@ -2,7 +2,6 @@
 package config
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -60,10 +59,6 @@ func New() (*ServerConfig, error) {
 
 	if config.DB.Address != "" {
 		config.FileStorage.Restore = false
-	}
-
-	if err = config.Validate(); err != nil {
-		return nil, fmt.Errorf("error validating config: \n%w", err)
 	}
 
 	return config, nil
@@ -147,22 +142,6 @@ func (s *ServerConfig) parseEnv() error {
 	}
 
 	return nil
-}
-
-func (s *ServerConfig) Validate() error {
-	var errs []error
-
-	if s.TLSCert.Key == "" {
-		errs = append(errs, errors.New("TLS Certificate Private Key is required"))
-	}
-
-	if s.TLSCert.Cert == "" {
-		errs = append(errs, errors.New("TLS Certificate Public Key is required"))
-	}
-
-	err := errors.Join(errs...)
-
-	return err
 }
 
 // String реализаует интерфейс flag.Value

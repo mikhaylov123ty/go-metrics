@@ -105,17 +105,19 @@ func (s *Server) Start(address string) error {
 	s.addHandlers(router, api.NewHandler(s.services.storageCommands))
 
 	// Проверка и генерация открытого и закрытого ключа
-	if err := s.checkCert(); err != nil {
-		s.logger.Warnf("error checking cert files: %s", err.Error())
-		if err = s.generateCert(); err != nil {
-			s.logger.Infof("error generating cert files: %s", err.Error())
-			return fmt.Errorf("error generating tls key: %w", err)
+	if s.tls.key != "" && s.tls.cert != "" {
+		if err := s.checkCert(); err != nil {
+			s.logger.Warnf("error checking cert files: %s", err.Error())
+			s.logger.Infof("start generating cert files")
+			if err = s.generateCert(); err != nil {
+				return fmt.Errorf("error generating tls key: %w", err)
+			}
 		}
 	}
 
 	// Старт сервера
 	s.logger.Infof("Starting server on %v", address)
-	return http.ListenAndServeTLS(address, s.tls.cert, s.tls.key, router)
+	return http.ListenAndServe(address, router)
 }
 
 // Наполнение сервера методами хендлера
@@ -125,7 +127,7 @@ func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
 
 	// /update
 	router.Route("/update", func(r chi.Router) {
-		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(handler.UpdatePostJSON))))
+		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(s.withDecrypt(handler.UpdatePostJSON)))))
 		r.Post("/{type}/{name}/{value}", s.withGZipEncode(s.withLogger(s.withHash(handler.UpdatePost))))
 	})
 
@@ -336,45 +338,51 @@ func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 
 func (s *Server) withDecrypt(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		privatePEM, err := os.ReadFile(s.tls.key)
-		if err != nil {
-			s.logger.Error("error reading tls private key", err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		privateKeyBlock, _ := pem.Decode(privatePEM)
-		privateKey, err := x509.ParsePKCS1PrivateKey(privateKeyBlock.Bytes)
-		if err != nil {
-			s.logger.Error("error parsing tls private key", err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
+		if s.tls.key != "" && s.tls.cert != "" {
 
-		var body []byte
-		// Чтение тела запроса, закрытие и копирование
-		// для передачи далее по пайплайну
-		body, err = io.ReadAll(r.Body)
-		if err != nil {
-			s.logger.Error(err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		defer func() {
-			if err = r.Body.Close(); err != nil {
-				log.Println("hash middleware: failed close request body", err)
+			privatePEM, err := os.ReadFile(s.tls.key)
+			if err != nil {
+				s.logger.Error("error reading tls private key", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
 			}
-		}()
+			privateKeyBlock, _ := pem.Decode(privatePEM)
+			privateKey, err := x509.ParsePKCS1PrivateKey(privateKeyBlock.Bytes)
+			if err != nil {
+				s.logger.Error("error parsing tls private key", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
 
-		res, err := rsa.DecryptPKCS1v15(rand.Reader, privateKey, body)
-		if err != nil {
-			s.logger.Error("error decrypting random text", err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
+			var body []byte
+			// Чтение тела запроса, закрытие и копирование
+			// для передачи далее по пайплайну
+			body, err = io.ReadAll(r.Body)
+			if err != nil {
+				s.logger.Error(err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			defer func() {
+				if err = r.Body.Close(); err != nil {
+					log.Println("Decode middleware: failed close request body", err)
+				}
+			}()
+
+			fmt.Println("DECRYPT BODY", string(body))
+
+			res, err := rsa.DecryptPKCS1v15(rand.Reader, privateKey, body)
+			if err != nil {
+				s.logger.Error("error decrypting random text", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			fmt.Println("AFTER DECRYPT BODY", string(res))
+
+			r.Body = io.NopCloser(bytes.NewBuffer(res))
 		}
-
-		r.Body = io.NopCloser(bytes.NewBuffer(res))
-
 		next(w, r)
 	}
 }
