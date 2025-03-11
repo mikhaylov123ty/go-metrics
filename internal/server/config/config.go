@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -18,6 +19,7 @@ type ServerConfig struct {
 	FileStorage *FileStorage
 	DB          *DB
 	Key         string
+	TLSCert     *TLSCert
 }
 
 // Logger - структура конфигруации логгера
@@ -37,10 +39,16 @@ type DB struct {
 	Address string
 }
 
+// TLSCert - структура конфигурации публичного и приватного ключей
+type TLSCert struct {
+	Key  string
+	Cert string
+}
+
 // New - конструктор конфигурации сервера
 func New() (*ServerConfig, error) {
 	var err error
-	config := &ServerConfig{Logger: &Logger{}, FileStorage: &FileStorage{}, DB: &DB{}}
+	config := &ServerConfig{Logger: &Logger{}, FileStorage: &FileStorage{}, DB: &DB{}, TLSCert: &TLSCert{}}
 
 	// Парсинг флагов
 	config.parseFlags()
@@ -52,6 +60,10 @@ func New() (*ServerConfig, error) {
 
 	if config.DB.Address != "" {
 		config.FileStorage.Restore = false
+	}
+
+	if err = config.Validate(); err != nil {
+		return nil, fmt.Errorf("error validating config: \n%w", err)
 	}
 
 	return config, nil
@@ -76,6 +88,10 @@ func (s *ServerConfig) parseFlags() {
 
 	// Флаги подписи и шифрования
 	flag.StringVar(&s.Key, "k", "", "Key")
+
+	// Флаги приватного и публичного ключей
+	flag.StringVar(&s.TLSCert.Key, "crypto-key", "", "Path to private crypto key file")
+	flag.StringVar(&s.TLSCert.Cert, "crypto-cert", "", "Path to certificate file")
 
 	_ = flag.Value(s)
 	flag.Var(s, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
@@ -122,7 +138,31 @@ func (s *ServerConfig) parseEnv() error {
 		s.Key = key
 	}
 
+	if tlsKey := os.Getenv("CRYPTO_KEY"); tlsKey != "" {
+		s.TLSCert.Key = tlsKey
+	}
+
+	if tlsCert := os.Getenv("CRYPTO_CERT"); tlsCert != "" {
+		s.TLSCert.Cert = tlsCert
+	}
+
 	return nil
+}
+
+func (s *ServerConfig) Validate() error {
+	var errs []error
+
+	if s.TLSCert.Key == "" {
+		errs = append(errs, errors.New("TLS Certificate Private Key is required"))
+	}
+
+	if s.TLSCert.Cert == "" {
+		errs = append(errs, errors.New("TLS Certificate Public Key is required"))
+	}
+
+	err := errors.Join(errs...)
+
+	return err
 }
 
 // String реализаует интерфейс flag.Value

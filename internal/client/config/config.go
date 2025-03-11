@@ -49,7 +49,7 @@ func (a *AgentConfig) parseFlags() {
 	flag.StringVar(&a.Key, "k", "", "Key")
 
 	// Флаги лимитов запросов
-	flag.IntVar(&a.RateLimit, "l", 5, "Metrics simultaneously send limit. Defalut: 10")
+	flag.IntVar(&a.RateLimit, "l", 5, "Metrics simultaneously send limit. Defalut: 5")
 
 	_ = flag.Value(a)
 	flag.Var(a, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")

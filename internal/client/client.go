@@ -184,3 +184,22 @@ func withRetry(request *resty.Request, URL string, w int) (*resty.Response, erro
 
 	return nil, err
 }
+
+//func withEncrypt()error{
+//	//agent side
+//	publicPEM, err := os.ReadFile(s.tls.cert)
+//	if err != nil {
+//		return fmt.Errorf("error reading tls public key: %w", err)
+//	}
+//	pubKeyBlock, _ := pem.Decode(publicPEM)
+//	pubKey, err := x509.ParseCertificate(pubKeyBlock.Bytes)
+//	if err != nil {
+//		return fmt.Errorf("error parsing tls public key: %w", err)
+//	}
+//	cipherText, err := rsa.EncryptPKCS1v15(rand.Reader, pubKey.PublicKey.(*rsa.PublicKey), []byte(randomText))
+//	if err != nil {
+//		return fmt.Errorf("error encrypting random text: %w", err)
+//	}
+//
+//	fmt.Println("CIPHER TEXT:", string(cipherText))
+//}

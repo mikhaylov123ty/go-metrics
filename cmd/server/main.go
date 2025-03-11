@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+
 	"metrics/internal/server"
 	"metrics/internal/server/api"
 	"metrics/internal/server/config"
@@ -86,5 +87,7 @@ func main() {
 	)
 
 	// Запуск сервера
-	serverInstance.Start(cfg.String())
+	if err = serverInstance.Start(cfg.String()); err != nil {
+		log.Fatal("Build Server Start Error: ", err)
+	}
 }
