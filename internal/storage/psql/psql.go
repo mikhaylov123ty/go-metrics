@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/golang-migrate/migrate/v4"
@@ -97,7 +98,13 @@ func (db *DataBase) ReadAll() ([]*models.Data, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying all metrics: %w", err)
 	}
-	defer rows.Close()
+
+	defer func() {
+		if err = rows.Close(); err != nil {
+			log.Printf("Read All Closing Rows Error: %v", err)
+		}
+	}()
+
 	if rows.Err() != nil {
 		return nil, fmt.Errorf("rows error: %w", rows.Err())
 	}
@@ -122,7 +129,12 @@ func (db *DataBase) Update(query *models.Data) error {
 	if err != nil {
 		return fmt.Errorf("starting transaction: %w", err)
 	}
-	defer tx.Rollback()
+
+	defer func() {
+		if err = tx.Rollback(); err != nil {
+			log.Printf("Update Rollback Error: %v", err)
+		}
+	}()
 
 	// Выполнение запроса
 	if _, err = tx.Exec(`
@@ -151,6 +163,12 @@ func (db *DataBase) UpdateBatch(queries []*models.Data) error {
 		return fmt.Errorf("starting transaction: %w", err)
 	}
 
+	defer func() {
+		if err = tx.Rollback(); err != nil {
+			log.Printf("Update Rollback Error: %v", err)
+		}
+	}()
+
 	// Парсинг запроса в контексте транзакции
 	statement, err := tx.Prepare(`
 		INSERT INTO metrics (name, type, value, delta)
@@ -160,10 +178,14 @@ func (db *DataBase) UpdateBatch(queries []*models.Data) error {
 			value = excluded.value,
 			delta = metrics.delta + excluded.delta;`)
 	if err != nil {
-		tx.Rollback()
 		return fmt.Errorf("preparing transaction: %w", err)
 	}
-	defer statement.Close()
+
+	defer func() {
+		if err = statement.Close(); err != nil {
+			log.Printf("Update Close Statement Error: %v", err)
+		}
+	}()
 
 	// Проход по метрикам и запись в базу
 	for _, query := range queries {
@@ -172,7 +194,6 @@ func (db *DataBase) UpdateBatch(queries []*models.Data) error {
 			query.Type,
 			query.Value,
 			query.Delta); err != nil {
-			tx.Rollback()
 			return fmt.Errorf("updating metric: %w", err)
 		}
 	}

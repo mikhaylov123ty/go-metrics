@@ -48,8 +48,8 @@ func (m *MetricsFileStorage) StoreMetrics() error {
 	// Сериализация метрик
 	data := make([]string, len(metrics))
 	for i, v := range metrics {
-		record, err := json.Marshal(v)
-		if err != nil {
+		record, marshalErr := json.Marshal(v)
+		if marshalErr != nil {
 			return fmt.Errorf("marshal metrics: %w", err)
 		}
 
