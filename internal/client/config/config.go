@@ -36,14 +36,14 @@ func New() (*AgentConfig, error) {
 	return config, nil
 }
 
-// Парсинг инструкций флагов агента
+// parseFlags - Парсинг инструкций флагов агента
 func (a *AgentConfig) parseFlags() {
 	// Базовые флаги
 	flag.StringVar(&a.Host, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
 	flag.StringVar(&a.Port, "port", "8080", "Port on which to listen. Example: \"8081\"")
 
 	// Флаги интервалов метрик
-	flag.IntVar(&a.ReportInterval, "r", 10, "Metrics send interval in seconds. Defalut: 10")
+	flag.IntVar(&a.ReportInterval, "r", 5, "Metrics send interval in seconds. Defalut: 5")
 	flag.IntVar(&a.PollInterval, "p", 2, "Metrics update interval in seconds. Defalut: 2")
 
 	// Флаги подписи и шифрования
@@ -61,7 +61,7 @@ func (a *AgentConfig) parseFlags() {
 	flag.Parse()
 }
 
-// Парсинг инструкций переменных окружений агента
+// parseEnv - Парсинг инструкций переменных окружений агента
 func (a *AgentConfig) parseEnv() error {
 	var err error
 	if address := os.Getenv("ADDRESS"); address != "" {

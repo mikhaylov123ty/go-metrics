@@ -90,7 +90,7 @@ func (a *Agent) Run() {
 			continue
 		}
 
-		// Запуск отправки метрик батчем
+		// Запуск задания отправки метрик батчем
 		if err := a.sendMetricsBatch(jobs); err != nil {
 			log.Println("Send metrics batch err:", err)
 		}
@@ -100,7 +100,9 @@ func (a *Agent) Run() {
 		// не дожидаясь окончания предыдущей итерации.
 		// Для ожидания достаточно запустить обычное чтение вне горутины.
 		go func(res chan *restyResponse) {
-			// Чтение результатов из результирующего канала по количеству заданий(горутин в цикле)
+			// Чтение результатов из результирующего канала по количеству заданий
+			// В сценарии с отправкой батчем, количество = 1
+			// В сценарии с отправкой каждой метрики по отдельности = кол-во отправок
 			for range 1 {
 				r := <-res
 				if r.err != nil {
@@ -125,14 +127,13 @@ func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyRespo
 			worker: i,
 		}
 
-		body := *data.data
-		if a.certFile != "" {
-			body, err = a.withEncrypt(body)
-			if err != nil {
-				result.err = fmt.Errorf("encrypt failed: %w", err)
-				res <- result
-				continue
-			}
+		// Обработка тела запроса
+		var body []byte
+		body, err = a.encryptRequest(*data.data)
+		if err != nil {
+			result.err = fmt.Errorf("encrypt failed: %w", err)
+			res <- result
+			continue
 		}
 
 		// Формирование и выполнение запроса
@@ -163,7 +164,7 @@ func (a *Agent) sendMetricsBatch(jobs chan<- *metricJob) error {
 	return nil
 }
 
-// Обертка для запросов с подписью
+// Middleware для запросов с подписью
 func (a *Agent) withSign(request *resty.Request) *resty.Request {
 	if a.key != "" {
 		h := hmac.New(sha256.New, []byte(a.key))
@@ -176,7 +177,7 @@ func (a *Agent) withSign(request *resty.Request) *resty.Request {
 	return request
 }
 
-// Метод повтора функции отправки метрик на сервер
+// Middleware повтора функции отправки метрик на сервер
 func withRetry(request *resty.Request, URL string, w int) (*resty.Response, error) {
 	var resp *resty.Response
 	var err error
@@ -205,29 +206,46 @@ func withRetry(request *resty.Request, URL string, w int) (*resty.Response, erro
 	return nil, err
 }
 
-func (a *Agent) withEncrypt(body []byte) ([]byte, error) {
-	publicPEM, err := os.ReadFile(a.certFile)
+// Шифрует тело запроса при наличии флага сертификата
+func (a *Agent) encryptRequest(body []byte) ([]byte, error) {
+	// Пропуск обработки, если флаг не задан
+	if a.certFile == "" {
+		return body, nil
+	}
+
+	// Чтение pem файла
+	certPEM, err := os.ReadFile(a.certFile)
 	if err != nil {
 		return nil, fmt.Errorf("error reading tls public key: %w", err)
 	}
-	pubKeyBlock, _ := pem.Decode(publicPEM)
+	// Поиск блока сертификата
+	pubKeyBlock, _ := pem.Decode(certPEM)
+	// Парсинг сертификата
 	parsedCert, err := x509.ParseCertificate(pubKeyBlock.Bytes)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing tls public key: %w", err)
 	}
-
+	// Присвоение публичного ключа
 	pubKey := parsedCert.PublicKey
 
-	var encryptedBytes []byte
-	blockLen := pubKey.(*rsa.PublicKey).Size() / 2
+	// Проверка срока истечения сертификата
+	if parsedCert.NotAfter.Before(time.Now()) {
+		return nil, fmt.Errorf("tls public key expired")
+	}
 
+	// Установка длины частей шифрования
+	blockLen := pubKey.(*rsa.PublicKey).Size() - 11
+
+	// Шифрование тела запроса частями
+	var encryptedBytes []byte
 	for start := 0; start < len(body); start += blockLen {
 		end := start + blockLen
 		if start+blockLen > len(body) {
 			end = len(body)
 		}
 
-		encryptedChunk, err := rsa.EncryptPKCS1v15(rand.Reader, pubKey.(*rsa.PublicKey), body[start:end])
+		var encryptedChunk []byte
+		encryptedChunk, err = rsa.EncryptPKCS1v15(rand.Reader, pubKey.(*rsa.PublicKey), body[start:end])
 		if err != nil {
 			return nil, fmt.Errorf("error encrypting random text: %w", err)
 		}
@@ -235,6 +253,5 @@ func (a *Agent) withEncrypt(body []byte) ([]byte, error) {
 		encryptedBytes = append(encryptedBytes, encryptedChunk...)
 	}
 
-	fmt.Println("CIPHER TEXT:", string(encryptedBytes))
 	return encryptedBytes, nil
 }

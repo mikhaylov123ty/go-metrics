@@ -10,7 +10,6 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -236,16 +235,21 @@ func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// Middleware для дешифровки тела запроса
 func (s *Server) withDecrypt(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Проверка флага приватнрго ключа
 		if s.privateKeyFile != "" {
+			// Чтение pem файла
 			privatePEM, err := os.ReadFile(s.privateKeyFile)
 			if err != nil {
 				s.logger.Error("error reading tls private key", err)
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
+			// Поиск блока приватного ключа
 			privateKeyBlock, _ := pem.Decode(privatePEM)
+			// Парсинг приватного ключа
 			privateKey, err := x509.ParsePKCS1PrivateKey(privateKeyBlock.Bytes)
 			if err != nil {
 				s.logger.Error("error parsing tls private key", err)
@@ -253,41 +257,45 @@ func (s *Server) withDecrypt(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 
+			// Чтение тела запроса
 			var body []byte
-			// Чтение тела запроса, закрытие и копирование
-			// для передачи далее по пайплайну
 			body, err = io.ReadAll(r.Body)
 			if err != nil {
-				s.logger.Error(err)
+				s.logger.Error("error reading body", err)
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 
+			// Отложенное закрытие тела
 			defer func() {
 				if err = r.Body.Close(); err != nil {
 					log.Println("Decode middleware: failed close request body", err)
 				}
 			}()
 
-			var decryptedBytes []byte
+			// Установка длины частей публичного ключа
 			blockLen := privateKey.PublicKey.Size()
 
+			// Дешифровка тела запроса частями
+			var decryptedBytes []byte
 			for start := 0; start < len(body); start += blockLen {
 				end := start + blockLen
 				if start+blockLen > len(body) {
 					end = len(body)
 				}
 
-				decryptedChunk, err := rsa.DecryptPKCS1v15(rand.Reader, privateKey, body[start:end])
-				fmt.Println("decrypted chunk:", string(decryptedChunk))
+				var decryptedChunk []byte
+				decryptedChunk, err = rsa.DecryptPKCS1v15(rand.Reader, privateKey, body[start:end])
 				if err != nil {
 					s.logger.Errorf("error decrypting random text: %s", err.Error())
 					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
+
 				decryptedBytes = append(decryptedBytes, decryptedChunk...)
 			}
 
+			// Подмена тела запроса
 			r.Body = io.NopCloser(bytes.NewBuffer(decryptedBytes))
 		}
 

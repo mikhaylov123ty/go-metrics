@@ -28,7 +28,8 @@ cleanup:
     rm -f ./cmd/server/server && \
     rm -f ./cmd/staticlint/multicheck && \
     rm -f ./temp_file && \
-    rm -f ./tempFile.txt
+    rm -f ./tempFile.txt && \
+    rm -f ./cert/*.pem
 
 #test increment 1-15
 tests: buildAgent buildServer

@@ -33,8 +33,9 @@ func main() {
 	}
 }
 
-// генерация открытого и закрытого ключа
+// Генерация сертификата
 func generateCert() error {
+	// Шаблон сертификата
 	cert := &x509.Certificate{
 		SerialNumber: big.NewInt(time.Now().Unix()),
 		Subject: pkix.Name{
@@ -49,16 +50,19 @@ func generateCert() error {
 		KeyUsage:    x509.KeyUsageDigitalSignature & x509.KeyUsageKeyEncipherment,
 	}
 
+	// Генерация приватного ключа
 	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
 		return fmt.Errorf("failed generate private key: %w", err)
 	}
 
+	// Создание сертификата
 	certBytes, err := x509.CreateCertificate(rand.Reader, cert, cert, &privateKey.PublicKey, privateKey)
 	if err != nil {
 		return fmt.Errorf("failed create certificate: %w", err)
 	}
 
+	// Шифрование блока сертификата
 	var certPEM bytes.Buffer
 	if err = pem.Encode(&certPEM, &pem.Block{
 		Type:  "CERTIFICATE",
@@ -67,6 +71,7 @@ func generateCert() error {
 		return fmt.Errorf("failed pem encode certificate: %w", err)
 	}
 
+	// Шифрование блока закрытого ключа
 	var keyPEM bytes.Buffer
 	if err = pem.Encode(&keyPEM, &pem.Block{
 		Type:  "PRIVATE KEY",
@@ -75,6 +80,7 @@ func generateCert() error {
 		return fmt.Errorf("failed pem encode private key: %w", err)
 	}
 
+	// Парсинг директории ключей и создание
 	keyPath := strings.Split(keysPairDir, "/")
 	if len(keyPath) > 1 {
 		container := strings.Join(keyPath[:len(keyPath)-1], "/")
@@ -83,10 +89,12 @@ func generateCert() error {
 		}
 	}
 
+	// Запись приватного ключа
 	if err = os.WriteFile(keysPairDir+keyName, keyPEM.Bytes(), 0644); err != nil {
 		return fmt.Errorf("failed write tls private key: %w", err)
 	}
 
+	// Запись серификата
 	if err = os.WriteFile(keysPairDir+certName, certPEM.Bytes(), 0644); err != nil {
 		return fmt.Errorf("failed write tls public key: %w", err)
 	}
@@ -94,6 +102,8 @@ func generateCert() error {
 	return nil
 }
 
+// Проверяет наличие ключей и сертификата
+// Пересоздает пару, в случае отсутствия любого из ключей
 func checkCert() error {
 	_, errKey := os.ReadFile(keysPairDir + keyName)
 	if errKey != nil {
