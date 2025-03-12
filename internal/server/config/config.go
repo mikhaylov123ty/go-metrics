@@ -11,14 +11,13 @@ import (
 
 // ServerConfig - структура конфигурации сервера
 type ServerConfig struct {
-	Host        string
-	Port        string
-	ConfigFile  string
-	Logger      *Logger
-	FileStorage *FileStorage
-	DB          *DB
-	Key         string
-	TLSCert     *TLSCert
+	Host           string
+	Port           string
+	Logger         *Logger
+	FileStorage    *FileStorage
+	DB             *DB
+	Key            string
+	PrivateKeyFile string
 }
 
 // Logger - структура конфигруации логгера
@@ -38,16 +37,10 @@ type DB struct {
 	Address string
 }
 
-// TLSCert - структура конфигурации публичного и приватного ключей
-type TLSCert struct {
-	Key  string
-	Cert string
-}
-
 // New - конструктор конфигурации сервера
 func New() (*ServerConfig, error) {
 	var err error
-	config := &ServerConfig{Logger: &Logger{}, FileStorage: &FileStorage{}, DB: &DB{}, TLSCert: &TLSCert{}}
+	config := &ServerConfig{Logger: &Logger{}, FileStorage: &FileStorage{}, DB: &DB{}}
 
 	// Парсинг флагов
 	config.parseFlags()
@@ -85,8 +78,7 @@ func (s *ServerConfig) parseFlags() {
 	flag.StringVar(&s.Key, "k", "", "Key")
 
 	// Флаги приватного и публичного ключей
-	flag.StringVar(&s.TLSCert.Key, "crypto-key", "", "Path to private crypto key file")
-	flag.StringVar(&s.TLSCert.Cert, "crypto-cert", "", "Path to certificate file")
+	flag.StringVar(&s.PrivateKeyFile, "crypto-key", "", "Path to private crypto key file")
 
 	_ = flag.Value(s)
 	flag.Var(s, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
@@ -133,12 +125,8 @@ func (s *ServerConfig) parseEnv() error {
 		s.Key = key
 	}
 
-	if tlsKey := os.Getenv("CRYPTO_KEY"); tlsKey != "" {
-		s.TLSCert.Key = tlsKey
-	}
-
-	if tlsCert := os.Getenv("CRYPTO_CERT"); tlsCert != "" {
-		s.TLSCert.Cert = tlsCert
+	if privateKey := os.Getenv("CRYPTO_KEY"); privateKey != "" {
+		s.PrivateKeyFile = privateKey
 	}
 
 	return nil

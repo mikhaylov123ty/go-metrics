@@ -3,12 +3,17 @@ package client
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"syscall"
 	"time"
 
@@ -37,10 +42,13 @@ type Agent struct {
 	statsBuf       collector.StatsBuf
 	key            string
 	rateLimit      int
+	certFile       string
 }
 
 // NewAgent - конструктор агента
 func NewAgent(cfg *config.AgentConfig) *Agent {
+	certPool := x509.NewCertPool()
+	certPool.AppendCertsFromPEM([]byte(cfg.CertFile))
 	return &Agent{
 		baseURL:        "http://" + cfg.String(),
 		client:         resty.New(),
@@ -50,6 +58,7 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 			Data: make(map[string]interface{})}),
 		key:       cfg.Key,
 		rateLimit: cfg.RateLimit,
+		certFile:  cfg.CertFile,
 	}
 }
 
@@ -106,6 +115,7 @@ func (a *Agent) Run() {
 
 // Метод отправки запроса
 func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyResponse) {
+	var err error
 	// Чтение из канала с заданиями
 	for data := range jobs {
 		URL := a.baseURL + data.urlPath
@@ -115,11 +125,21 @@ func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyRespo
 			worker: i,
 		}
 
+		body := *data.data
+		if a.certFile != "" {
+			body, err = a.withEncrypt(body)
+			if err != nil {
+				result.err = fmt.Errorf("encrypt failed: %w", err)
+				res <- result
+				continue
+			}
+		}
+
 		// Формирование и выполнение запроса
 		result.response, result.err = withRetry(a.withSign(a.client.R().
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Accept-Encoding", "gzip").
-			SetBody(*data.data)), URL, i)
+			SetBody(body)), URL, i)
 
 		// Запись в результирующий канал
 		res <- result
@@ -185,21 +205,43 @@ func withRetry(request *resty.Request, URL string, w int) (*resty.Response, erro
 	return nil, err
 }
 
-//func withEncrypt()error{
-//	//agent side
-//	publicPEM, err := os.ReadFile(s.tls.cert)
-//	if err != nil {
-//		return fmt.Errorf("error reading tls public key: %w", err)
-//	}
-//	pubKeyBlock, _ := pem.Decode(publicPEM)
-//	pubKey, err := x509.ParseCertificate(pubKeyBlock.Bytes)
-//	if err != nil {
-//		return fmt.Errorf("error parsing tls public key: %w", err)
-//	}
-//	cipherText, err := rsa.EncryptPKCS1v15(rand.Reader, pubKey.PublicKey.(*rsa.PublicKey), []byte(randomText))
-//	if err != nil {
-//		return fmt.Errorf("error encrypting random text: %w", err)
-//	}
-//
-//	fmt.Println("CIPHER TEXT:", string(cipherText))
-//}
+func (a *Agent) withEncrypt(body []byte) ([]byte, error) {
+	//agent side
+	publicPEM, err := os.ReadFile(a.certFile)
+	if err != nil {
+		return nil, fmt.Errorf("error reading tls public key: %w", err)
+	}
+	pubKeyBlock, _ := pem.Decode(publicPEM)
+	parsedCert, err := x509.ParseCertificate(pubKeyBlock.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing tls public key: %w", err)
+	}
+
+	pubKey := parsedCert.PublicKey
+
+	fmt.Println("BODY LEN", len(body))
+
+	fmt.Println("public key:", pubKey)
+	fmt.Println("body:", string(body))
+	fmt.Println("KEY SIZE", pubKey.(*rsa.PublicKey).Size())
+
+	var encryptedBytes []byte
+	blockLen := pubKey.(*rsa.PublicKey).Size() / 2
+
+	for start := 0; start < len(body); start += blockLen {
+		end := start + blockLen
+		if start+blockLen > len(body) {
+			end = len(body)
+		}
+
+		encryptedChunk, err := rsa.EncryptPKCS1v15(rand.Reader, pubKey.(*rsa.PublicKey), body[start:end])
+		if err != nil {
+			return nil, fmt.Errorf("error encrypting random text: %w", err)
+		}
+
+		encryptedBytes = append(encryptedBytes, encryptedChunk...)
+	}
+
+	fmt.Println("CIPHER TEXT:", string(encryptedBytes))
+	return encryptedBytes, nil
+}

@@ -17,6 +17,7 @@ type AgentConfig struct {
 	PollInterval   int
 	Key            string
 	RateLimit      int
+	CertFile       string
 }
 
 // New - конструктор конфигурации агента
@@ -50,6 +51,9 @@ func (a *AgentConfig) parseFlags() {
 
 	// Флаги лимитов запросов
 	flag.IntVar(&a.RateLimit, "l", 5, "Metrics simultaneously send limit. Defalut: 5")
+
+	//Флаг публичного ключа
+	flag.StringVar(&a.CertFile, "crypto-key", "", "Path to public cert file")
 
 	_ = flag.Value(a)
 	flag.Var(a, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
@@ -86,6 +90,10 @@ func (a *AgentConfig) parseEnv() error {
 		if a.RateLimit, err = strconv.Atoi(rateLimit); err != nil {
 			return fmt.Errorf("error parsing RATE_LIMIT: %w", err)
 		}
+	}
+
+	if cert := os.Getenv("CRYPTO_KEY"); cert != "" {
+		a.CertFile = cert
 	}
 
 	return nil
