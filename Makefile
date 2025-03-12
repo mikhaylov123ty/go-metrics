@@ -162,6 +162,7 @@ runAgentWithFlags:
 runServerWithFlags:
 	go run -ldflags "-X main.buildVersion=v0.01 -X 'main.buildDate=$$(date +'%Y/%m/%d')'" cmd/server/main.go
 
+#increment 21
 generateCert:
 	cd ./cert && \
 	go run main.go
