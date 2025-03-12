@@ -239,7 +239,6 @@ func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) withDecrypt(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.privateKeyFile != "" {
-
 			privatePEM, err := os.ReadFile(s.privateKeyFile)
 			if err != nil {
 				s.logger.Error("error reading tls private key", err)
@@ -270,8 +269,6 @@ func (s *Server) withDecrypt(next http.HandlerFunc) http.HandlerFunc {
 				}
 			}()
 
-			fmt.Println("BODY TO DECRYPT", string(body))
-
 			var decryptedBytes []byte
 			blockLen := privateKey.PublicKey.Size()
 
@@ -290,10 +287,10 @@ func (s *Server) withDecrypt(next http.HandlerFunc) http.HandlerFunc {
 				}
 				decryptedBytes = append(decryptedBytes, decryptedChunk...)
 			}
-			fmt.Println("AFTER DECRYPT BODY", string(decryptedBytes))
 
 			r.Body = io.NopCloser(bytes.NewBuffer(decryptedBytes))
 		}
+
 		next(w, r)
 	}
 }

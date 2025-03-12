@@ -359,7 +359,7 @@ func ExampleHandler_IndexGet() {
 			log.Println("error closing response body", err)
 		}
 	}()
-	
+
 	resBody, _ := io.ReadAll(res.Body)
 
 	fmt.Println(res.StatusCode)

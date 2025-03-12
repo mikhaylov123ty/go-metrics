@@ -206,7 +206,6 @@ func withRetry(request *resty.Request, URL string, w int) (*resty.Response, erro
 }
 
 func (a *Agent) withEncrypt(body []byte) ([]byte, error) {
-	//agent side
 	publicPEM, err := os.ReadFile(a.certFile)
 	if err != nil {
 		return nil, fmt.Errorf("error reading tls public key: %w", err)
@@ -218,12 +217,6 @@ func (a *Agent) withEncrypt(body []byte) ([]byte, error) {
 	}
 
 	pubKey := parsedCert.PublicKey
-
-	fmt.Println("BODY LEN", len(body))
-
-	fmt.Println("public key:", pubKey)
-	fmt.Println("body:", string(body))
-	fmt.Println("KEY SIZE", pubKey.(*rsa.PublicKey).Size())
 
 	var encryptedBytes []byte
 	blockLen := pubKey.(*rsa.PublicKey).Size() / 2
