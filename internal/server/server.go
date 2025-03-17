@@ -28,10 +28,10 @@ import (
 
 // Server - структура сервера
 type Server struct {
-	services       services
-	logger         *logrus.Logger
-	options        options
-	privateKeyFile string
+	services  services
+	logger    *logrus.Logger
+	options   options
+	cryptoKey string
 }
 
 // services - структура команд БД и файла с бэкапом
@@ -41,7 +41,7 @@ type services struct {
 }
 
 type options struct {
-	storeInterval   int
+	storeInterval   float64
 	fileStoragePath string
 	restore         bool
 	key             string
@@ -61,7 +61,7 @@ func New(storageCommands *api.StorageCommands, metricsFileStorage *metrics.Metri
 			restore:         cfg.FileStorage.Restore,
 			key:             cfg.Key,
 		},
-		privateKeyFile: cfg.PrivateKeyFile,
+		cryptoKey: cfg.CryptoKey,
 	}
 }
 
@@ -239,9 +239,9 @@ func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) withDecrypt(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Проверка флага приватнрго ключа
-		if s.privateKeyFile != "" {
+		if s.cryptoKey != "" {
 			// Чтение pem файла
-			privatePEM, err := os.ReadFile(s.privateKeyFile)
+			privatePEM, err := os.ReadFile(s.cryptoKey)
 			if err != nil {
 				s.logger.Error("error reading tls private key", err)
 				w.WriteHeader(http.StatusBadRequest)

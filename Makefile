@@ -1,5 +1,7 @@
 SERVER_PORT:=30011
 ADDRESS:="localhost:${SERVER_PORT}"
+AGENT_ARGS:="-config ./cmd/agent/config.json"
+SERVER_ARGS:="-config ./cmd/server/config.json"
 TEMP_FILE:="temp_file"
 DSN = "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
 
@@ -29,7 +31,8 @@ cleanup:
     rm -f ./cmd/staticlint/multicheck && \
     rm -f ./temp_file && \
     rm -f ./tempFile.txt && \
-    rm -f ./cert/*.pem
+    rm -f ./cert/*.pem && \
+    rm -f ./tempFileFromConfig.txt
 
 #test increment 1-15
 tests: buildAgent buildServer

@@ -36,8 +36,8 @@ const (
 type Agent struct {
 	baseURL        string
 	client         *resty.Client
-	pollInterval   int
-	reportInterval int
+	pollInterval   float64
+	reportInterval float64
 	metrics        []*models.Data
 	statsBuf       collector.StatsBuf
 	key            string
@@ -48,7 +48,7 @@ type Agent struct {
 // NewAgent - конструктор агента
 func NewAgent(cfg *config.AgentConfig) *Agent {
 	certPool := x509.NewCertPool()
-	certPool.AppendCertsFromPEM([]byte(cfg.CertFile))
+	certPool.AppendCertsFromPEM([]byte(cfg.CryptoKey))
 	return &Agent{
 		baseURL:        "http://" + cfg.String(),
 		client:         resty.New(),
@@ -58,7 +58,7 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 			Data: make(map[string]interface{})}),
 		key:       cfg.Key,
 		rateLimit: cfg.RateLimit,
-		certFile:  cfg.CertFile,
+		certFile:  cfg.CryptoKey,
 	}
 }
 
