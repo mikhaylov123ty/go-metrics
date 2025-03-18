@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"net/http"
-
-	_ "net/http/pprof"
-
 	"metrics/internal/client"
 	"metrics/internal/client/config"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
 )
 
 var (
@@ -31,10 +35,34 @@ func main() {
 	// Инициализация инстанса агента
 	agentInstance := client.NewAgent(cfg)
 
-	// Запуск агента
-	go agentInstance.Run()
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)
+	defer cancel()
 
-	if err = http.ListenAndServe(":30012", nil); err != nil {
-		log.Fatal("HTTP Server Error:", err)
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+	// Запуск агента
+	go agentInstance.Run(ctx)
+
+	srv := http.Server{Addr: ":30012"}
+	go func() {
+		if err = srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("HTTP Server Error:", err)
+		}
+
+	}()
+
+	<-ctx.Done()
+	if err = srv.Shutdown(ctx); err != nil && err != context.Canceled {
+		log.Fatal("HTTP Server Shutdown Failed:", err)
 	}
+
+	fmt.Println("Err", ctx.Err())
+	cancel()
+
+	time.Sleep(10 * time.Second)
+
+	fmt.Println("Agent Shutdown gracefully")
+
+	os.Exit(0)
+
 }

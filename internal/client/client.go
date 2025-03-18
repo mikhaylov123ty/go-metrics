@@ -2,6 +2,7 @@
 package client
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
@@ -63,12 +64,18 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 }
 
 // Run запускает агента
-func (a *Agent) Run() {
+func (a *Agent) Run(ctx context.Context) {
 	// Запуск горутины по сбору метрик с интервалом pollInterval
 	go func() {
 		for {
-			time.Sleep(time.Duration(a.pollInterval) * time.Second)
-			a.metrics = a.statsBuf().BuildMetrics()
+			select {
+			case <-ctx.Done():
+				fmt.Println("Build Metrics Done")
+				return
+			default:
+				time.Sleep(time.Duration(a.pollInterval) * time.Second)
+				a.metrics = a.statsBuf().BuildMetrics()
+			}
 		}
 	}()
 
@@ -78,73 +85,87 @@ func (a *Agent) Run() {
 
 	// Ограничение рабочих, которые выполняют одновременные запросы к серверу
 	for i := range a.rateLimit {
-		go a.postWorker(i, jobs, res)
+		go a.postWorker(ctx, i, jobs, res)
 	}
 
 	// Запуск бесконечного цикла отправки метрики с интервалом reportInterval
 	for {
-		time.Sleep(time.Duration(a.reportInterval) * time.Second)
+		select {
+		case <-ctx.Done():
+			fmt.Println("Send Metrics Done")
+			return
+		default:
+			time.Sleep(time.Duration(a.reportInterval) * time.Second)
 
-		// Проверка пустых батчей
-		if len(a.metrics) == 0 {
-			continue
-		}
-
-		// Запуск задания отправки метрик батчем
-		if err := a.sendMetricsBatch(jobs); err != nil {
-			log.Println("Send metrics batch err:", err)
-		}
-
-		// Запуск горутины чтения результирующего канала
-		// В интерпретации задания, предполагается, что следующая отрпавка может быть выполнена,
-		// не дожидаясь окончания предыдущей итерации.
-		// Для ожидания достаточно запустить обычное чтение вне горутины.
-		go func(res chan *restyResponse) {
-			// Чтение результатов из результирующего канала по количеству заданий
-			// В сценарии с отправкой батчем, количество = 1
-			// В сценарии с отправкой каждой метрики по отдельности = кол-во отправок
-			for range 1 {
-				r := <-res
-				if r.err != nil {
-					log.Printf("Worker: %d, Failed sending metric: %s", r.worker, r.err.Error())
-					continue
-				}
-				log.Printf(" Worker: %d Metric sent, Code: %d, URL: %s, Body: %s\n", r.worker, r.response.StatusCode(), r.response.Request.URL, r.response.Request.Body)
+			// Проверка пустых батчей
+			if len(a.metrics) == 0 {
+				continue
 			}
-		}(res)
+
+			// Запуск задания отправки метрик батчем
+			if err := a.sendMetricsBatch(jobs); err != nil {
+				log.Println("Send metrics batch err:", err)
+			}
+
+			// Запуск горутины чтения результирующего канала
+			// В интерпретации задания, предполагается, что следующая отрпавка может быть выполнена,
+			// не дожидаясь окончания предыдущей итерации.
+			// Для ожидания достаточно запустить обычное чтение вне горутины.
+			go func(res chan *restyResponse) {
+				// Чтение результатов из результирующего канала по количеству заданий
+				// В сценарии с отправкой батчем, количество = 1
+				// В сценарии с отправкой каждой метрики по отдельности = кол-во отправок
+				for range 1 {
+					r := <-res
+					if r.err != nil {
+						log.Printf("Worker: %d, Failed sending metric: %s", r.worker, r.err.Error())
+						continue
+					}
+					log.Printf(" Worker: %d Metric sent, Code: %d, URL: %s, Body: %s\n", r.worker, r.response.StatusCode(), r.response.Request.URL, r.response.Request.Body)
+				}
+			}(res)
+		}
 	}
 }
 
 // Метод отправки запроса
-func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyResponse) {
+func (a *Agent) postWorker(ctx context.Context, i int, jobs <-chan *metricJob, res chan<- *restyResponse) {
 	var err error
-	// Чтение из канала с заданиями
-	for data := range jobs {
-		URL := a.baseURL + data.urlPath
 
-		// Создание ответа для передачи в результирующий канал
-		result := &restyResponse{
-			worker: i,
-		}
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Post Metrics Done, Worker:", i)
+			return
+		case data := <-jobs:
+			// Чтение из канала с заданиями
+			URL := a.baseURL + data.urlPath
 
-		// Обработка тела запроса
-		var body []byte
-		body, err = a.encryptRequest(*data.data)
-		if err != nil {
-			result.err = fmt.Errorf("encrypt failed: %w", err)
+			// Создание ответа для передачи в результирующий канал
+			result := &restyResponse{
+				worker: i,
+			}
+
+			// Обработка тела запроса
+			var body []byte
+			body, err = a.encryptRequest(*data.data)
+			if err != nil {
+				result.err = fmt.Errorf("encrypt failed: %w", err)
+				res <- result
+				continue
+			}
+
+			// Формирование и выполнение запроса
+			result.response, result.err = withRetry(a.withSign(a.client.R().
+				SetHeader("Content-Type", "application/json").
+				SetHeader("Accept-Encoding", "gzip").
+				SetBody(body)), URL, i)
+
+			// Запись в результирующий канал
 			res <- result
-			continue
 		}
-
-		// Формирование и выполнение запроса
-		result.response, result.err = withRetry(a.withSign(a.client.R().
-			SetHeader("Content-Type", "application/json").
-			SetHeader("Accept-Encoding", "gzip").
-			SetBody(body)), URL, i)
-
-		// Запись в результирующий канал
-		res <- result
 	}
+
 }
 
 // Метод отправки метрик батчами
