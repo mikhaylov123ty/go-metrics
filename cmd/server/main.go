@@ -89,6 +89,7 @@ func main() {
 		cfg,
 	)
 
+	// Создание контекса с сигналами
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)
 	defer stop()
 

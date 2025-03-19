@@ -56,8 +56,11 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 		client:         resty.New(),
 		pollInterval:   cfg.PollInterval,
 		reportInterval: cfg.ReportInterval,
-		statsBuf: collector.CollectMetrics(&collector.Stats{
-			Data: make(map[string]interface{})}),
+		statsBuf: collector.CollectMetrics(
+			&collector.Stats{
+				Data: make(map[string]interface{}),
+			},
+		),
 		key:       cfg.Key,
 		rateLimit: cfg.RateLimit,
 		certFile:  cfg.CryptoKey,
@@ -76,6 +79,7 @@ func (a *Agent) Run(ctx context.Context, wg *sync.WaitGroup) {
 	go func() {
 		defer wg.Done()
 		for {
+			// Завершение горутины, если получен сигнал
 			select {
 			case <-ctx.Done():
 				log.Println("Build Metrics Done")
@@ -95,6 +99,8 @@ func (a *Agent) Run(ctx context.Context, wg *sync.WaitGroup) {
 	// Запуск бесконечного цикла отправки метрики с интервалом reportInterval
 	for {
 		select {
+		//Заверешине цикла и закрытые канала jobs,
+		//если в очередной итерации был получен сигнал
 		case <-ctx.Done():
 			log.Println("Send Metrics Done")
 			close(jobs)
@@ -131,20 +137,18 @@ func (a *Agent) Run(ctx context.Context, wg *sync.WaitGroup) {
 			}(res)
 		}
 	}
-
 }
 
 // Метод отправки запроса
 func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyResponse) {
 	var err error
 	for {
+		// Чтение заданий и проверка их наличия в канале
 		data, ok := <-jobs
 		if !ok {
 			log.Printf("Worker %d finished", i)
 			return
 		}
-
-		// Чтение из канала с заданиями
 		URL := a.baseURL + data.urlPath
 
 		// Создание ответа для передачи в результирующий канал
@@ -170,7 +174,6 @@ func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyRespo
 		// Запись в результирующий канал
 		res <- result
 	}
-
 }
 
 // Метод отправки метрик батчами

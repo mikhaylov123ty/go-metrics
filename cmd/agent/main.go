@@ -33,15 +33,18 @@ func main() {
 	// Инициализация инстанса агента
 	agentInstance := client.NewAgent(cfg)
 
+	// Создание контекста с сигналами
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)
 	defer stop()
 
+	// Создание группы ожидания
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
 	// Запуск агента
 	go agentInstance.Run(ctx, wg)
 
+	// Запуск сервера профилирования
 	srv := http.Server{Addr: ":30012"}
 	go func() {
 		if err = srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -49,12 +52,15 @@ func main() {
 		}
 	}()
 
+	// Ожидание сигнала
 	<-ctx.Done()
 
+	// Остановка сервера
 	if err = srv.Shutdown(ctx); err != nil && err != context.Canceled {
 		log.Fatal("HTTP Server Shutdown Failed:", err)
 	}
 
+	// Ожидание завершения горутин
 	wg.Wait()
 
 	log.Println("Agent Shutdown gracefully")

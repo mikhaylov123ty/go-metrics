@@ -69,8 +69,6 @@ func New(storageCommands *api.StorageCommands, metricsFileStorage *metrics.Metri
 
 // Start запускает сервера
 func (s *Server) Start(ctx context.Context, address string) error {
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
 	// Инициализация даты из файла
 	if s.options.restore {
 		if err := s.services.metricsFileStorage.InitMetricsFromFile(); err != nil {
@@ -79,10 +77,15 @@ func (s *Server) Start(ctx context.Context, address string) error {
 		s.logger.Infof("metrics file storage restored")
 	}
 
+	// Создание группы ожидания
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
 	// Запуск горутины сохранения метрик с интервалом
 	go func() {
 		defer wg.Done()
 		for {
+			//Останавливает горутину, если получен сигнал
 			select {
 			case <-ctx.Done():
 				s.logger.Warn("shutting down file storage worker")
@@ -104,19 +107,23 @@ func (s *Server) Start(ctx context.Context, address string) error {
 	s.addHandlers(router, api.NewHandler(s.services.storageCommands))
 
 	// Старт сервера
-	s.logger.Infof("Starting server on %v", address)
-
 	srv := http.Server{Addr: address, Handler: router}
 	go func() {
+		s.logger.Infof("Starting server on %v", address)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal("HTTP Server Error:", err)
 		}
 	}()
 
+	// Ожидание сигнала
 	<-ctx.Done()
+
+	// Остановка сервера
 	if err := srv.Shutdown(ctx); err != nil && err != context.Canceled {
 		log.Fatal("HTTP Server Shutdown Failed:", err)
 	}
+
+	// Ожидание завершения горутин
 	wg.Wait()
 
 	return nil
