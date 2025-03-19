@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"syscall"
 	"time"
 
@@ -64,9 +65,16 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 }
 
 // Run запускает агента
-func (a *Agent) Run(ctx context.Context) {
+func (a *Agent) Run(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	// Создание каналов для связи горутин отправки метрик
+	jobs := make(chan *metricJob)
+	res := make(chan *restyResponse)
+
 	// Запуск горутины по сбору метрик с интервалом pollInterval
 	go func() {
+		defer wg.Done()
 		for {
 			select {
 			case <-ctx.Done():
@@ -79,13 +87,9 @@ func (a *Agent) Run(ctx context.Context) {
 		}
 	}()
 
-	// Создание каналов для связи горутин отправки метрик
-	jobs := make(chan *metricJob)
-	res := make(chan *restyResponse)
-
 	// Ограничение рабочих, которые выполняют одновременные запросы к серверу
 	for i := range a.rateLimit {
-		go a.postWorker(ctx, i, jobs, res)
+		go a.postWorker(i, jobs, res)
 	}
 
 	// Запуск бесконечного цикла отправки метрики с интервалом reportInterval
@@ -93,6 +97,7 @@ func (a *Agent) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			fmt.Println("Send Metrics Done")
+			close(jobs)
 			return
 		default:
 			time.Sleep(time.Duration(a.reportInterval) * time.Second)
@@ -126,44 +131,43 @@ func (a *Agent) Run(ctx context.Context) {
 			}(res)
 		}
 	}
+
 }
 
 // Метод отправки запроса
-func (a *Agent) postWorker(ctx context.Context, i int, jobs <-chan *metricJob, res chan<- *restyResponse) {
+func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyResponse) {
 	var err error
-
 	for {
-		select {
-		case <-ctx.Done():
-			fmt.Println("Post Metrics Done, Worker:", i)
+		data, ok := <-jobs
+		if !ok {
 			return
-		case data := <-jobs:
-			// Чтение из канала с заданиями
-			URL := a.baseURL + data.urlPath
-
-			// Создание ответа для передачи в результирующий канал
-			result := &restyResponse{
-				worker: i,
-			}
-
-			// Обработка тела запроса
-			var body []byte
-			body, err = a.encryptRequest(*data.data)
-			if err != nil {
-				result.err = fmt.Errorf("encrypt failed: %w", err)
-				res <- result
-				continue
-			}
-
-			// Формирование и выполнение запроса
-			result.response, result.err = withRetry(a.withSign(a.client.R().
-				SetHeader("Content-Type", "application/json").
-				SetHeader("Accept-Encoding", "gzip").
-				SetBody(body)), URL, i)
-
-			// Запись в результирующий канал
-			res <- result
 		}
+
+		// Чтение из канала с заданиями
+		URL := a.baseURL + data.urlPath
+
+		// Создание ответа для передачи в результирующий канал
+		result := &restyResponse{
+			worker: i,
+		}
+
+		// Обработка тела запроса
+		var body []byte
+		body, err = a.encryptRequest(*data.data)
+		if err != nil {
+			result.err = fmt.Errorf("encrypt failed: %w", err)
+			res <- result
+			continue
+		}
+
+		// Формирование и выполнение запроса
+		result.response, result.err = withRetry(a.withSign(a.client.R().
+			SetHeader("Content-Type", "application/json").
+			SetHeader("Accept-Encoding", "gzip").
+			SetBody(body)), URL, i)
+
+		// Запись в результирующий канал
+		res <- result
 	}
 
 }

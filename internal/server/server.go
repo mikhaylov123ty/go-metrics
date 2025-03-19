@@ -4,6 +4,7 @@ package server
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
@@ -15,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"metrics/internal/server/api"
@@ -66,7 +68,9 @@ func New(storageCommands *api.StorageCommands, metricsFileStorage *metrics.Metri
 }
 
 // Start запускает сервера
-func (s *Server) Start(address string) error {
+func (s *Server) Start(ctx context.Context, address string) error {
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	// Инициализация даты из файла
 	if s.options.restore {
 		if err := s.services.metricsFileStorage.InitMetricsFromFile(); err != nil {
@@ -77,11 +81,18 @@ func (s *Server) Start(address string) error {
 
 	// Запуск горутины сохранения метрик с интервалом
 	go func() {
+		defer wg.Done()
 		for {
-			time.Sleep(time.Duration(s.options.storeInterval) * time.Second)
+			select {
+			case <-ctx.Done():
+				log.Println("shutting down store server gracefully")
+				return
+			default:
+				time.Sleep(time.Duration(s.options.storeInterval) * time.Second)
 
-			if err := s.services.metricsFileStorage.StoreMetrics(); err != nil {
-				s.logger.Errorf("store metrics: failed read metrics: %s", err.Error())
+				if err := s.services.metricsFileStorage.StoreMetrics(); err != nil {
+					s.logger.Errorf("store metrics: failed read metrics: %s", err.Error())
+				}
 			}
 		}
 	}()
@@ -94,7 +105,20 @@ func (s *Server) Start(address string) error {
 
 	// Старт сервера
 	s.logger.Infof("Starting server on %v", address)
-	return http.ListenAndServe(address, router)
+
+	srv := http.Server{Addr: address, Handler: router}
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("HTTP Server Error:", err)
+		}
+	}()
+
+	<-ctx.Done()
+	if err := srv.Shutdown(ctx); err != nil && err != context.Canceled {
+		log.Fatal("HTTP Server Shutdown Failed:", err)
+	}
+	wg.Wait()
+	return nil
 }
 
 // Наполнение сервера методами хендлера

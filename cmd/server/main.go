@@ -1,9 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
-
 	"metrics/internal/server"
 	"metrics/internal/server/api"
 	"metrics/internal/server/config"
@@ -11,6 +11,8 @@ import (
 	"metrics/internal/storage/memory"
 	"metrics/internal/storage/psql"
 	"metrics/pkg/logger"
+	"os/signal"
+	"syscall"
 )
 
 var (
@@ -86,8 +88,15 @@ func main() {
 		cfg,
 	)
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)
+	defer stop()
+
 	// Запуск сервера
-	if err = serverInstance.Start(cfg.String()); err != nil {
+	if err = serverInstance.Start(ctx, cfg.String()); err != nil {
 		log.Fatal("Build Server Start Error: ", err)
 	}
+
+	//TODO CLOSE DB
+	fmt.Println("Server Shutdown gracefully")
+
 }
