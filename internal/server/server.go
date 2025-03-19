@@ -85,7 +85,7 @@ func (s *Server) Start(ctx context.Context, address string) error {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("shutting down store server gracefully")
+				s.logger.Warn("shutting down file storage worker")
 				return
 			default:
 				time.Sleep(time.Duration(s.options.storeInterval) * time.Second)
@@ -118,6 +118,7 @@ func (s *Server) Start(ctx context.Context, address string) error {
 		log.Fatal("HTTP Server Shutdown Failed:", err)
 	}
 	wg.Wait()
+
 	return nil
 }
 

@@ -22,14 +22,15 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	funcDecl := func(x *ast.FuncDecl) {
 		for _, stmt := range x.Body.List {
 			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
-				callExpr := exprStmt.X.(*ast.CallExpr)
-				seExpr := callExpr.Fun.(*ast.SelectorExpr)
-				ident := seExpr.X.(*ast.Ident)
-				if ident.Name == "os" && seExpr.Sel.Name == "Exit" {
-					pass.Report(analysis.Diagnostic{
-						Pos:     callExpr.Pos(),
-						Message: "os.Exit calls not allowed",
-					})
+				if callExpr, ok := exprStmt.X.(*ast.CallExpr); ok {
+					seExpr := callExpr.Fun.(*ast.SelectorExpr)
+					ident := seExpr.X.(*ast.Ident)
+					if ident.Name == "os" && seExpr.Sel.Name == "Exit" {
+						pass.Report(analysis.Diagnostic{
+							Pos:     callExpr.Pos(),
+							Message: "os.Exit calls not allowed",
+						})
+					}
 				}
 			}
 		}

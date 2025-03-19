@@ -78,7 +78,7 @@ func (a *Agent) Run(ctx context.Context, wg *sync.WaitGroup) {
 		for {
 			select {
 			case <-ctx.Done():
-				fmt.Println("Build Metrics Done")
+				log.Println("Build Metrics Done")
 				return
 			default:
 				time.Sleep(time.Duration(a.pollInterval) * time.Second)
@@ -88,7 +88,7 @@ func (a *Agent) Run(ctx context.Context, wg *sync.WaitGroup) {
 	}()
 
 	// Ограничение рабочих, которые выполняют одновременные запросы к серверу
-	for i := range a.rateLimit {
+	for i := range a.rateLimit - 1 {
 		go a.postWorker(i, jobs, res)
 	}
 
@@ -96,7 +96,7 @@ func (a *Agent) Run(ctx context.Context, wg *sync.WaitGroup) {
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Println("Send Metrics Done")
+			log.Println("Send Metrics Done")
 			close(jobs)
 			return
 		default:
@@ -140,6 +140,7 @@ func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyRespo
 	for {
 		data, ok := <-jobs
 		if !ok {
+			log.Printf("Worker %d finished", i)
 			return
 		}
 

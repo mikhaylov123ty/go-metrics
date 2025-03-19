@@ -8,7 +8,6 @@ import (
 	"metrics/internal/client/config"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
 	"os/signal"
 	"sync"
 	"syscall"
@@ -58,7 +57,5 @@ func main() {
 
 	wg.Wait()
 
-	fmt.Println("Agent Shutdown gracefully")
-
-	os.Exit(0)
+	log.Println("Agent Shutdown gracefully")
 }

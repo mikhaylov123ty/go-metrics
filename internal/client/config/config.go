@@ -76,9 +76,8 @@ func (a *AgentConfig) parseFlags() {
 
 // parseEnv - Парсинг инструкций переменных окружений агента
 func (a *AgentConfig) parseEnv() error {
-	var err error
 	if address := os.Getenv("ADDRESS"); address != "" {
-		if err = a.Set(address); err != nil {
+		if err := a.Set(address); err != nil {
 			return fmt.Errorf("error setting ADDRESS: %w", err)
 		}
 	}
@@ -105,9 +104,11 @@ func (a *AgentConfig) parseEnv() error {
 	}
 
 	if rateLimit := os.Getenv("RATE_LIMIT"); rateLimit != "" {
-		if a.RateLimit, err = strconv.Atoi(rateLimit); err != nil {
-			return fmt.Errorf("error parsing RATE_LIMIT: %w", err)
+		limit, err := strconv.Atoi(rateLimit)
+		if err != nil {
+			return fmt.Errorf("invalid RATE_LIMIT to int conversion: %w", err)
 		}
+		a.RateLimit = limit
 	}
 
 	if cert := os.Getenv("CRYPTO_KEY"); cert != "" {
