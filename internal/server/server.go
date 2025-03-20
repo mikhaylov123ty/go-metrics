@@ -4,12 +4,19 @@ package server
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/hmac"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"metrics/internal/server/api"
@@ -23,18 +30,23 @@ import (
 
 // Server - структура сервера
 type Server struct {
-	services        services
-	logger          *logrus.Logger
-	storeInterval   int
-	fileStoragePath string
-	restore         bool
-	key             string
+	services  services
+	logger    *logrus.Logger
+	options   options
+	cryptoKey string
 }
 
 // services - структура команд БД и файла с бэкапом
 type services struct {
 	storageCommands    *api.StorageCommands
 	metricsFileStorage *metrics.MetricsFileStorage
+}
+
+type options struct {
+	storeInterval   float64
+	fileStoragePath string
+	restore         bool
+	key             string
 }
 
 // New - конструктор инстанса сервера
@@ -44,31 +56,46 @@ func New(storageCommands *api.StorageCommands, metricsFileStorage *metrics.Metri
 			storageCommands:    storageCommands,
 			metricsFileStorage: metricsFileStorage,
 		},
-		logger:          logger,
-		storeInterval:   cfg.FileStorage.StoreInterval,
-		fileStoragePath: cfg.FileStorage.FileStoragePath,
-		restore:         cfg.FileStorage.Restore,
-		key:             cfg.Key,
+		logger: logger,
+		options: options{
+			storeInterval:   cfg.FileStorage.StoreInterval,
+			fileStoragePath: cfg.FileStorage.FileStoragePath,
+			restore:         cfg.FileStorage.Restore,
+			key:             cfg.Key,
+		},
+		cryptoKey: cfg.CryptoKey,
 	}
 }
 
 // Start запускает сервера
-func (s *Server) Start(address string) {
+func (s *Server) Start(ctx context.Context, address string) error {
 	// Инициализация даты из файла
-	if s.restore {
+	if s.options.restore {
 		if err := s.services.metricsFileStorage.InitMetricsFromFile(); err != nil {
 			s.logger.Fatal("error restore metrics from file: ", err)
 		}
 		s.logger.Infof("metrics file storage restored")
 	}
 
+	// Создание группы ожидания
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
 	// Запуск горутины сохранения метрик с интервалом
 	go func() {
+		defer wg.Done()
 		for {
-			time.Sleep(time.Duration(s.storeInterval) * time.Second)
+			//Останавливает горутину, если получен сигнал
+			select {
+			case <-ctx.Done():
+				s.logger.Warn("shutting down file storage worker")
+				return
+			default:
+				time.Sleep(time.Duration(s.options.storeInterval) * time.Second)
 
-			if err := s.services.metricsFileStorage.StoreMetrics(); err != nil {
-				s.logger.Errorf("store metrics: failed read metrics: %s", err.Error())
+				if err := s.services.metricsFileStorage.StoreMetrics(); err != nil {
+					s.logger.Errorf("store metrics: failed read metrics: %s", err.Error())
+				}
 			}
 		}
 	}()
@@ -80,10 +107,26 @@ func (s *Server) Start(address string) {
 	s.addHandlers(router, api.NewHandler(s.services.storageCommands))
 
 	// Старт сервера
-	s.logger.Infof("Starting server on %v", address)
-	if err := http.ListenAndServe(address, router); err != nil {
-		log.Fatal(err)
+	srv := http.Server{Addr: address, Handler: router}
+	go func() {
+		s.logger.Infof("Starting server on %v", address)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("HTTP Server Error:", err)
+		}
+	}()
+
+	// Ожидание сигнала
+	<-ctx.Done()
+
+	// Остановка сервера
+	if err := srv.Shutdown(ctx); err != nil && err != context.Canceled {
+		log.Fatal("HTTP Server Shutdown Failed:", err)
 	}
+
+	// Ожидание завершения горутин
+	wg.Wait()
+
+	return nil
 }
 
 // Наполнение сервера методами хендлера
@@ -93,18 +136,18 @@ func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
 
 	// /update
 	router.Route("/update", func(r chi.Router) {
-		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(handler.UpdatePostJSON))))
+		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(s.withDecrypt(handler.UpdatePostJSON)))))
 		r.Post("/{type}/{name}/{value}", s.withGZipEncode(s.withLogger(s.withHash(handler.UpdatePost))))
 	})
 
 	// /updates
 	router.Route("/updates", func(r chi.Router) {
-		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(handler.UpdatesPostJSON))))
+		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(s.withDecrypt(handler.UpdatesPostJSON)))))
 	})
 
 	// /value
 	router.Route("/value", func(r chi.Router) {
-		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(handler.ValueGetJSON))))
+		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(s.withDecrypt(handler.ValueGetJSON)))))
 		r.Get("/{type}/{name}", s.withGZipEncode(s.withLogger(s.withHash(handler.ValueGet))))
 	})
 
@@ -190,7 +233,7 @@ func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Проверка наличия ключа из флага и в запросе
-		if len(s.key) > 0 && len(requestHeader) > 0 {
+		if len(s.options.key) > 0 && len(requestHeader) > 0 {
 			var body []byte
 			// Чтение тела запроса, закрытие и копирование
 			// для передачи далее по пайплайну
@@ -210,16 +253,84 @@ func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 			r.Body = io.NopCloser(bytes.NewBuffer(body))
 
 			// Вычисление и валидация хэша
-			hash := getHash(s.key, body)
+			hash := getHash(s.options.key, body)
 			if !hmac.Equal(hash, requestHeader) {
 				s.logger.Error("invalid hash")
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 
-			hashWriter.key = s.key
+			hashWriter.key = s.options.key
 		}
 
 		next(hashWriter, r)
+	}
+}
+
+// Middleware для дешифровки тела запроса
+func (s *Server) withDecrypt(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Проверка флага приватнрго ключа
+		if s.cryptoKey != "" {
+			// Чтение pem файла
+			privatePEM, err := os.ReadFile(s.cryptoKey)
+			if err != nil {
+				s.logger.Error("error reading tls private key", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			// Поиск блока приватного ключа
+			privateKeyBlock, _ := pem.Decode(privatePEM)
+			// Парсинг приватного ключа
+			privateKey, err := x509.ParsePKCS1PrivateKey(privateKeyBlock.Bytes)
+			if err != nil {
+				s.logger.Error("error parsing tls private key", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			// Чтение тела запроса
+			var body []byte
+			body, err = io.ReadAll(r.Body)
+			if err != nil {
+				s.logger.Error("error reading body", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			// Отложенное закрытие тела
+			defer func() {
+				if err = r.Body.Close(); err != nil {
+					log.Println("Decode middleware: failed close request body", err)
+				}
+			}()
+
+			// Установка длины частей публичного ключа
+			blockLen := privateKey.PublicKey.Size()
+
+			// Дешифровка тела запроса частями
+			var decryptedBytes []byte
+			for start := 0; start < len(body); start += blockLen {
+				end := start + blockLen
+				if start+blockLen > len(body) {
+					end = len(body)
+				}
+
+				var decryptedChunk []byte
+				decryptedChunk, err = rsa.DecryptPKCS1v15(rand.Reader, privateKey, body[start:end])
+				if err != nil {
+					s.logger.Errorf("error decrypting random text: %s", err.Error())
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+
+				decryptedBytes = append(decryptedBytes, decryptedChunk...)
+			}
+
+			// Подмена тела запроса
+			r.Body = io.NopCloser(bytes.NewBuffer(decryptedBytes))
+		}
+
+		next(w, r)
 	}
 }

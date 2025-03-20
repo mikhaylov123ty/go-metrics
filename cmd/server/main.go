@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"os/signal"
+	"syscall"
+
 	"metrics/internal/server"
 	"metrics/internal/server/api"
 	"metrics/internal/server/config"
@@ -29,6 +33,12 @@ func main() {
 		log.Fatal("Build Server Config Error:", err)
 	}
 
+	// Инициализация инстанса логгера
+	loggerInstance, err := logger.New(cfg.Logger.LogLevel)
+	if err != nil {
+		log.Fatal("Build Logger Config Error:", err)
+	}
+
 	// Инициализация инстанса хранения данных
 	var storageCommands *api.StorageCommands
 	switch {
@@ -43,7 +53,7 @@ func main() {
 
 		defer func() {
 			if err = psqlStorage.Instance.Close(); err != nil {
-				log.Println("Build Server Storage Close Instance Error:", err)
+				loggerInstance.Errorf("Build Server Storage Close Instance Error: %s", err.Error())
 			}
 		}()
 
@@ -56,7 +66,7 @@ func main() {
 			psqlStorage,
 			psqlStorage,
 		)
-		log.Println("Storage: postgres")
+		loggerInstance.Info("Storage: postgres")
 
 	default:
 		memStorage := memory.NewMemoryStorage()
@@ -66,13 +76,7 @@ func main() {
 			memStorage,
 			nil,
 		)
-		log.Println("Storage: memory")
-	}
-
-	// Инициализация инстанса логгера
-	loggerInstance, err := logger.New(cfg.Logger.LogLevel)
-	if err != nil {
-		log.Fatal("Build Logger Config Error:", err)
+		loggerInstance.Info("Storage: memory")
 	}
 
 	metricsFileStorage := metrics.NewMetricsFileStorage(storageCommands, cfg.FileStorage.FileStoragePath)
@@ -85,6 +89,14 @@ func main() {
 		cfg,
 	)
 
+	// Создание контекса с сигналами
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)
+	defer stop()
+
 	// Запуск сервера
-	serverInstance.Start(cfg.String())
+	if err = serverInstance.Start(ctx, cfg.String()); err != nil {
+		log.Fatal("Build Server Start Error: ", err)
+	}
+
+	loggerInstance.Warn("Server Shutdown gracefully")
 }

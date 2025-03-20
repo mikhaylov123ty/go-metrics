@@ -1,5 +1,7 @@
 SERVER_PORT:=30011
 ADDRESS:="localhost:${SERVER_PORT}"
+AGENT_ARGS:="-config ./cmd/agent/config.json"
+SERVER_ARGS:="-config ./cmd/server/config.json"
 TEMP_FILE:="temp_file"
 DSN = "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
 
@@ -28,7 +30,9 @@ cleanup:
     rm -f ./cmd/server/server && \
     rm -f ./cmd/staticlint/multicheck && \
     rm -f ./temp_file && \
-    rm -f ./tempFile.txt
+    rm -f ./tempFile.txt && \
+    rm -f ./cert/*.pem && \
+    rm -f ./tempFileFromConfig.txt
 
 #test increment 1-15
 tests: buildAgent buildServer
@@ -160,3 +164,8 @@ runAgentWithFlags:
 
 runServerWithFlags:
 	go run -ldflags "-X main.buildVersion=v0.01 -X 'main.buildDate=$$(date +'%Y/%m/%d')'" cmd/server/main.go
+
+#increment 21
+generateCert:
+	cd ./cert && \
+	go run main.go

@@ -2,14 +2,12 @@
 package collector
 
 import (
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/mem"
 	"log"
 	"math/rand/v2"
 	"runtime"
 	"strconv"
-	"sync"
-
-	"github.com/shirou/gopsutil/v4/cpu"
-	"github.com/shirou/gopsutil/v4/mem"
 
 	"metrics/internal/models"
 )
@@ -26,9 +24,6 @@ type Stats struct {
 func CollectMetrics(statsBuf *Stats) StatsBuf {
 	counter := 1
 	return func() *Stats {
-		wg := &sync.WaitGroup{}
-		wg.Add(1)
-
 		// Сбор основных метрик
 		// Чтение метрик
 		rt := &runtime.MemStats{}
@@ -68,34 +63,27 @@ func CollectMetrics(statsBuf *Stats) StatsBuf {
 		// Генерация произвольного значения
 		(statsBuf.Data)["RandomValue"] = rand.Float64()
 
-		// Сбор дополнительных метрик
-		go func() {
-			defer wg.Done()
+		// Сбор статистики памяти
+		vmStats, err := mem.VirtualMemory()
+		if err != nil {
+			log.Println("collect metrics error: Mem.VirtualMemory err:", err)
+		}
 
-			// Сбор статистики памяти
-			vmStats, err := mem.VirtualMemory()
-			if err != nil {
-				log.Println("collect metrics error: Mem.VirtualMemory err:", err)
-			}
+		// Сбор статистики ЦПУ
+		cpuStats, err := cpu.Percent(0, true)
+		if err != nil {
+			log.Println("collect metrics error: cpu.Percent err:", err)
+		}
 
-			// Сбор статистики ЦПУ
-			cpuStats, err := cpu.Percent(0, true)
-			if err != nil {
-				log.Println("collect metrics error: cpu.Percent err:", err)
-			}
+		// Присвоение полей статистики
+		(statsBuf.Data)["TotalMemory"] = float64(vmStats.Total)
+		(statsBuf.Data)["FreeMemory"] = float64(vmStats.Free)
 
-			// Присвоение полей статистики
-			(statsBuf.Data)["TotalMemory"] = float64(vmStats.Total)
-			(statsBuf.Data)["FreeMemory"] = float64(vmStats.Free)
-
-			// Генератор статистики по каждому ЦПУ
-			for i, cpuStat := range cpuStats {
-				recordString := "CPUutilization" + strconv.Itoa(i+1)
-				(statsBuf.Data)[recordString] = cpuStat
-			}
-		}()
-
-		wg.Wait()
+		// Генератор статистики по каждому ЦПУ
+		for i, cpuStat := range cpuStats {
+			recordString := "CPUutilization" + strconv.Itoa(i+1)
+			(statsBuf.Data)[recordString] = cpuStat
+		}
 
 		// Увеличение счетчика
 		counter++

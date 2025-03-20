@@ -30,8 +30,6 @@ type ConfigData struct {
 	Staticcheck []string `json:"staticChecks"`
 }
 
-// TODO add config builder
-
 // Run - запускает статический анализ кода проекта
 func Run() error {
 	cfgData, err := os.ReadFile(configPath)

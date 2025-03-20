@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
-
 	_ "net/http/pprof"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"metrics/internal/client"
 	"metrics/internal/client/config"
@@ -31,10 +34,38 @@ func main() {
 	// Инициализация инстанса агента
 	agentInstance := client.NewAgent(cfg)
 
-	// Запуск агента
-	go agentInstance.Run()
+	// Создание контекста с сигналами
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)
+	defer stop()
 
-	if err = http.ListenAndServe(":30012", nil); err != nil {
-		log.Fatal("HTTP Server Error:", err)
+	// Создание группы ожидания
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	// Запуск агента
+	go func() {
+		defer wg.Done()
+		agentInstance.Run(ctx)
+	}()
+
+	// Запуск сервера профилирования
+	srv := http.Server{Addr: ":30012"}
+	go func() {
+		if err = srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("HTTP Server Error:", err)
+		}
+	}()
+
+	// Ожидание сигнала
+	<-ctx.Done()
+
+	// Остановка сервера
+	if err = srv.Shutdown(ctx); err != nil && err != context.Canceled {
+		log.Fatal("HTTP Server Shutdown Failed:", err)
 	}
+
+	// Ожидание завершения горутин
+	wg.Wait()
+
+	log.Println("Agent Shutdown gracefully")
 }

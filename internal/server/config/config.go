@@ -2,22 +2,25 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ServerConfig - структура конфигурации сервера
 type ServerConfig struct {
 	Host        string
 	Port        string
-	ConfigFile  string
 	Logger      *Logger
 	FileStorage *FileStorage
 	DB          *DB
 	Key         string
+	CryptoKey   string
+	ConfigFile  string
 }
 
 // Logger - структура конфигруации логгера
@@ -27,7 +30,7 @@ type Logger struct {
 
 // FileStorage - структура конфигурации хранилища
 type FileStorage struct {
-	StoreInterval   int
+	StoreInterval   float64
 	FileStoragePath string
 	Restore         bool
 }
@@ -44,6 +47,13 @@ func New() (*ServerConfig, error) {
 
 	// Парсинг флагов
 	config.parseFlags()
+
+	// Инициализация конфига из файла
+	if config.ConfigFile != "" {
+		if err = config.initConfigFile(); err != nil {
+			return nil, fmt.Errorf("failed init config file: %w", err)
+		}
+	}
 
 	// Парсинг переменных окружения
 	if err = config.parseEnv(); err != nil {
@@ -67,8 +77,8 @@ func (s *ServerConfig) parseFlags() {
 	flag.StringVar(&s.Logger.LogLevel, "l", "info", "Log level. Example: \"info\"")
 
 	// Флаги файлового хранилища
-	flag.IntVar(&s.FileStorage.StoreInterval, "i", 10, "Interval in seconds, to store metrics in file.")
-	flag.StringVar(&s.FileStorage.FileStoragePath, "f", "tempFile.txt", "Path to file to store metrics. Example: ./tempFile.txt")
+	flag.Float64Var(&s.FileStorage.StoreInterval, "i", 0, "Interval in seconds, to store metrics in file.")
+	flag.StringVar(&s.FileStorage.FileStoragePath, "f", "", "Path to file to store metrics. Example: ./tempFile.txt")
 	flag.BoolVar(&s.FileStorage.Restore, "r", true, "Restore previous metrics from file.")
 
 	// Флаги БД
@@ -76,6 +86,12 @@ func (s *ServerConfig) parseFlags() {
 
 	// Флаги подписи и шифрования
 	flag.StringVar(&s.Key, "k", "", "Key")
+
+	// Флаги приватного и публичного ключей
+	flag.StringVar(&s.CryptoKey, "crypto-key", "", "Path to private crypto key file")
+
+	// Флаг файла конфигурации
+	flag.StringVar(&s.ConfigFile, "config", "", "Config file")
 
 	_ = flag.Value(s)
 	flag.Var(s, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
@@ -99,9 +115,9 @@ func (s *ServerConfig) parseEnv() error {
 	if storeInterval := os.Getenv("STORE_INTERVAL"); storeInterval != "" {
 		interval, err := strconv.Atoi(storeInterval)
 		if err != nil {
-			return fmt.Errorf("error parsing STORE_INTERVAL: %w", err)
+			return fmt.Errorf("invalid STORE_INTERVAL to int conversion: %w", err)
 		}
-		s.FileStorage.StoreInterval = interval
+		s.FileStorage.StoreInterval = float64(interval)
 	}
 
 	if fileStoragePath := os.Getenv("FILE_STORAGE_PATH"); fileStoragePath != "" {
@@ -120,6 +136,79 @@ func (s *ServerConfig) parseEnv() error {
 
 	if key := os.Getenv("KEY"); key != "" {
 		s.Key = key
+	}
+
+	if privateKey := os.Getenv("CRYPTO_KEY"); privateKey != "" {
+		s.CryptoKey = privateKey
+	}
+
+	if config := os.Getenv("CONFIG"); config != "" {
+		s.ConfigFile = config
+	}
+
+	return nil
+}
+
+// initConfigFile читает и инициализирует файл конфигурации
+func (s *ServerConfig) initConfigFile() error {
+	fileData, err := os.ReadFile(s.ConfigFile)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	if err = json.Unmarshal(fileData, s); err != nil {
+		return fmt.Errorf("failed to unmarshal config file: %w", err)
+	}
+
+	return nil
+}
+
+// UnmarshalJSON реализует интерфейс Unmarshaler
+// позволяет десериализировать файл конфига с условиями
+func (s *ServerConfig) UnmarshalJSON(b []byte) error {
+	var err error
+	var cfg struct {
+		Address       string `json:"address"`
+		Restore       bool   `json:"restore"`
+		StoreInterval string `json:"store_interval"`
+		StoreFile     string `json:"store_file"`
+		DatabaseDSN   string `json:"database_dsn"`
+		CryptoKey     string `json:"crypto_key"`
+	}
+
+	if err = json.Unmarshal(b, &cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal config file: %w", err)
+	}
+
+	if (s.Host == "" && s.Port == "") && cfg.Address != "" {
+		if err = s.Set(cfg.Address); err != nil {
+			return fmt.Errorf("error parsing address: %w", err)
+		}
+	}
+
+	if !s.FileStorage.Restore && cfg.Restore {
+		s.FileStorage.Restore = true
+	}
+
+	if s.FileStorage.StoreInterval == 0 && cfg.StoreInterval != "" {
+		var interval time.Duration
+		interval, err = time.ParseDuration(cfg.StoreInterval)
+		if err != nil {
+			return fmt.Errorf("error parsing store_interval: %w", err)
+		}
+		s.FileStorage.StoreInterval = interval.Seconds()
+	}
+
+	if s.FileStorage.FileStoragePath == "" && cfg.StoreFile != "" {
+		s.FileStorage.FileStoragePath = cfg.StoreFile
+	}
+
+	if s.DB.Address == "" && cfg.DatabaseDSN != "" {
+		s.DB.Address = cfg.DatabaseDSN
+	}
+
+	if s.CryptoKey == "" && cfg.CryptoKey != "" {
+		s.CryptoKey = cfg.CryptoKey
 	}
 
 	return nil
