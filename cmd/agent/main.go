@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"metrics/internal/client"
-	"metrics/internal/client/config"
 	"net/http"
 	_ "net/http/pprof"
 	"os/signal"
 	"sync"
 	"syscall"
+
+	"metrics/internal/client"
+	"metrics/internal/client/config"
 )
 
 var (
@@ -39,10 +40,13 @@ func main() {
 
 	// Создание группы ожидания
 	wg := &sync.WaitGroup{}
-	wg.Add(2)
+	wg.Add(1)
 
 	// Запуск агента
-	go agentInstance.Run(ctx, wg)
+	go func() {
+		defer wg.Done()
+		agentInstance.Run(ctx)
+	}()
 
 	// Запуск сервера профилирования
 	srv := http.Server{Addr: ":30012"}

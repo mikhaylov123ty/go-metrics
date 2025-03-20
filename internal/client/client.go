@@ -68,8 +68,9 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 }
 
 // Run запускает агента
-func (a *Agent) Run(ctx context.Context, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (a *Agent) Run(ctx context.Context) {
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
 
 	// Создание каналов для связи горутин отправки метрик
 	jobs := make(chan *metricJob)
@@ -97,46 +98,51 @@ func (a *Agent) Run(ctx context.Context, wg *sync.WaitGroup) {
 	}
 
 	// Запуск бесконечного цикла отправки метрики с интервалом reportInterval
-	for {
-		select {
-		//Заверешине цикла и закрытые канала jobs,
-		//если в очередной итерации был получен сигнал
-		case <-ctx.Done():
-			log.Println("Send Metrics Done")
-			close(jobs)
-			return
-		default:
-			time.Sleep(time.Duration(a.reportInterval) * time.Second)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			//Заверешине цикла и закрытые канала jobs,
+			//если в очередной итерации был получен сигнал
+			case <-ctx.Done():
+				log.Println("Send Metrics Done")
+				close(jobs)
 
-			// Проверка пустых батчей
-			if len(a.metrics) == 0 {
-				continue
-			}
+				return
+			default:
+				time.Sleep(time.Duration(a.reportInterval) * time.Second)
 
-			// Запуск задания отправки метрик батчем
-			if err := a.sendMetricsBatch(jobs); err != nil {
-				log.Println("Send metrics batch err:", err)
-			}
-
-			// Запуск горутины чтения результирующего канала
-			// В интерпретации задания, предполагается, что следующая отрпавка может быть выполнена,
-			// не дожидаясь окончания предыдущей итерации.
-			// Для ожидания достаточно запустить обычное чтение вне горутины.
-			go func(res chan *restyResponse) {
-				// Чтение результатов из результирующего канала по количеству заданий
-				// В сценарии с отправкой батчем, количество = 1
-				// В сценарии с отправкой каждой метрики по отдельности = кол-во отправок
-				for range 1 {
-					r := <-res
-					if r.err != nil {
-						log.Printf("Worker: %d, Failed sending metric: %s", r.worker, r.err.Error())
-						continue
-					}
-					log.Printf(" Worker: %d Metric sent, Code: %d, URL: %s, Body: %s\n", r.worker, r.response.StatusCode(), r.response.Request.URL, r.response.Request.Body)
+				// Проверка пустых батчей
+				if len(a.metrics) == 0 {
+					continue
 				}
-			}(res)
+
+				// Запуск задания отправки метрик батчем
+				if err := a.sendMetricsBatch(jobs); err != nil {
+					log.Println("Send metrics batch err:", err)
+				}
+
+				// Запуск горутины чтения результирующего канала
+				// В интерпретации задания, предполагается, что следующая отрпавка может быть выполнена,
+				// не дожидаясь окончания предыдущей итерации.
+				// Для ожидания достаточно запустить обычное чтение вне горутины.
+				go func(res chan *restyResponse) {
+					// Чтение результатов из результирующего канала по количеству заданий
+					// В сценарии с отправкой батчем, количество = 1
+					// В сценарии с отправкой каждой метрики по отдельности = кол-во отправок
+					for range 1 {
+						r := <-res
+						if r.err != nil {
+							log.Printf("Worker: %d, Failed sending metric: %s", r.worker, r.err.Error())
+							continue
+						}
+						log.Printf(" Worker: %d Metric sent, Code: %d, URL: %s, Body: %s\n", r.worker, r.response.StatusCode(), r.response.Request.URL, r.response.Request.Body)
+					}
+				}(res)
+			}
 		}
-	}
+	}()
+	wg.Wait()
 }
 
 // Метод отправки запроса
