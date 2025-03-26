@@ -23,7 +23,7 @@ unitTests:
 race:
 	go test -v -race ./...
 
-pre-push: lint runMultichecker buildAgent buildServer unitTests tests cleanup
+pre-push: lint race runMultichecker buildAgent buildServer unitTests tests cleanup
 
 cleanup:
 	rm -f ./cmd/agent/agent && \

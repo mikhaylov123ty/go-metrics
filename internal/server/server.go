@@ -13,6 +13,7 @@ import (
 	"encoding/pem"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -30,10 +31,10 @@ import (
 
 // Server - структура сервера
 type Server struct {
-	services  services
-	logger    *logrus.Logger
-	options   options
-	cryptoKey string
+	services services
+	logger   *logrus.Logger
+	options  options
+	auth     auth
 }
 
 // services - структура команд БД и файла с бэкапом
@@ -47,6 +48,11 @@ type options struct {
 	fileStoragePath string
 	restore         bool
 	key             string
+}
+
+type auth struct {
+	cryptoKey     string
+	trustedSubnet *net.IPNet
 }
 
 // New - конструктор инстанса сервера
@@ -63,7 +69,10 @@ func New(storageCommands *api.StorageCommands, metricsFileStorage *metrics.Metri
 			restore:         cfg.FileStorage.Restore,
 			key:             cfg.Key,
 		},
-		cryptoKey: cfg.CryptoKey,
+		auth: auth{
+			cryptoKey:     cfg.CryptoKey,
+			trustedSubnet: cfg.Net.TrustedSubnet,
+		},
 	}
 }
 
@@ -131,36 +140,43 @@ func (s *Server) Start(ctx context.Context, address string) error {
 
 // Наполнение сервера методами хендлера
 func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
+	router.Use(
+		middleware.RequestID,
+		s.withLogger,
+		s.withTrustedSubnet,
+		s.withGZipEncode,
+	)
+
 	// /debug profiler
 	router.Mount("/debug", middleware.Profiler())
 
 	// /update
 	router.Route("/update", func(r chi.Router) {
-		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(s.withDecrypt(handler.UpdatePostJSON)))))
-		r.Post("/{type}/{name}/{value}", s.withGZipEncode(s.withLogger(s.withHash(handler.UpdatePost))))
+		r.Post("/", s.withHash(s.withDecrypt(handler.UpdatePostJSON)))
+		r.Post("/{type}/{name}/{value}", s.withHash(handler.UpdatePost))
 	})
 
 	// /updates
 	router.Route("/updates", func(r chi.Router) {
-		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(s.withDecrypt(handler.UpdatesPostJSON)))))
+		r.Post("/", s.withHash(s.withDecrypt(handler.UpdatesPostJSON)))
 	})
 
 	// /value
 	router.Route("/value", func(r chi.Router) {
-		r.Post("/", s.withGZipEncode(s.withLogger(s.withHash(s.withDecrypt(handler.ValueGetJSON)))))
-		r.Get("/{type}/{name}", s.withGZipEncode(s.withLogger(s.withHash(handler.ValueGet))))
+		r.Post("/", s.withHash(s.withDecrypt(handler.ValueGetJSON)))
+		r.Get("/{type}/{name}", s.withHash(handler.ValueGet))
 	})
 
 	// index
-	router.Get("/", s.withGZipEncode(s.withLogger(s.withHash(handler.IndexGet))))
+	router.Get("/", s.withHash(handler.IndexGet))
 
 	// /ping
-	router.Get("/ping", s.withLogger(handler.PingGet))
+	router.Get("/ping", handler.PingGet)
 }
 
 // middleware эндпоинтов для логирования
-func (s *Server) withLogger(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) withLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
 		// Создание обертки для ResponseWriter
@@ -173,26 +189,31 @@ func (s *Server) withLogger(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Переход к следующему хендлеру
-		next(lw, r)
+		next.ServeHTTP(lw, r)
 
-		s.logger.Infof("Incoming HTTP Request: URI: %s, Method: %v, Time Duration: %v", r.RequestURI, r.Method, time.Since(start))
-		s.logger.Infof("Outgoing HTTP Response: Status Code: %v, Content Length:%v", lw.ResponseData.Status, lw.ResponseData.Size)
-	}
+		requestID, ok := r.Context().Value(middleware.RequestIDKey).(string)
+		if !ok {
+			requestID = "unknown"
+		}
+		
+		s.logger.Infof("Incoming HTTP Request: URI: %s, Method: %v, Time Duration: %v, Request ID: %v", r.RequestURI, r.Method, time.Since(start), requestID)
+		s.logger.Infof("Outgoing HTTP Response: Status Code: %v, Content Length:%v, Request ID: %v\"", lw.ResponseData.Status, lw.ResponseData.Size, requestID)
+	})
 }
 
 // middleware эндпоинтов для компрессии
-func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) withGZipEncode(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Accept") != "application/json" && r.Header.Get("Accept") != "text/html" {
 			s.logger.Infof("client accepts content is not json or html: %s", r.Header.Get("Accept"))
-			next(w, r)
+			next.ServeHTTP(w, r)
 			return
 		}
 
 		// Проверка хедеров
 		headers := strings.Split(r.Header.Get("Accept-Encoding"), ",")
 		if !ArrayContains(headers, "gzip") {
-			next(w, r)
+			next.ServeHTTP(w, r)
 			return
 		}
 
@@ -212,8 +233,8 @@ func (s *Server) withGZipEncode(next http.HandlerFunc) http.HandlerFunc {
 
 		w.Header().Set("Content-Encoding", "gzip")
 
-		next(GzipWriter{ResponseWriter: w, Writer: gz}, r)
-	}
+		next.ServeHTTP(GzipWriter{ResponseWriter: w, Writer: gz}, r)
+	})
 }
 
 // middleware для эндпоинтов для хеширования и подписи
@@ -271,9 +292,9 @@ func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) withDecrypt(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Проверка флага приватнрго ключа
-		if s.cryptoKey != "" {
+		if s.auth.cryptoKey != "" {
 			// Чтение pem файла
-			privatePEM, err := os.ReadFile(s.cryptoKey)
+			privatePEM, err := os.ReadFile(s.auth.cryptoKey)
 			if err != nil {
 				s.logger.Error("error reading tls private key", err)
 				w.WriteHeader(http.StatusBadRequest)
@@ -333,4 +354,25 @@ func (s *Server) withDecrypt(next http.HandlerFunc) http.HandlerFunc {
 
 		next(w, r)
 	}
+}
+
+func (s *Server) withTrustedSubnet(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.auth.trustedSubnet != nil {
+			requestIP := net.ParseIP(r.Header.Get("X-Real-IP"))
+			if requestIP == nil {
+				s.logger.Errorln("error parsing X-Real-IP header")
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+
+			if !s.auth.trustedSubnet.Contains(requestIP) {
+				s.logger.Errorln("IP address is not trusted")
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }

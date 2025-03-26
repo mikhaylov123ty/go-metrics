@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -21,6 +22,7 @@ type ServerConfig struct {
 	Key         string
 	CryptoKey   string
 	ConfigFile  string
+	Net         *Net
 }
 
 // Logger - структура конфигруации логгера
@@ -40,10 +42,15 @@ type DB struct {
 	Address string
 }
 
+type Net struct {
+	CIDR          string
+	TrustedSubnet *net.IPNet
+}
+
 // New - конструктор конфигурации сервера
 func New() (*ServerConfig, error) {
 	var err error
-	config := &ServerConfig{Logger: &Logger{}, FileStorage: &FileStorage{}, DB: &DB{}}
+	config := &ServerConfig{Logger: &Logger{}, FileStorage: &FileStorage{}, DB: &DB{}, Net: &Net{}}
 
 	// Парсинг флагов
 	config.parseFlags()
@@ -62,6 +69,12 @@ func New() (*ServerConfig, error) {
 
 	if config.DB.Address != "" {
 		config.FileStorage.Restore = false
+	}
+
+	if config.Net.CIDR != "" {
+		if err = config.ParseNet(); err != nil {
+			return nil, fmt.Errorf("error parsing CIDR: %w", err)
+		}
 	}
 
 	return config, nil
@@ -92,6 +105,9 @@ func (s *ServerConfig) parseFlags() {
 
 	// Флаг файла конфигурации
 	flag.StringVar(&s.ConfigFile, "config", "", "Config file")
+
+	// Флаг доверенной подсети
+	flag.StringVar(&s.Net.CIDR, "t", "", "Trusted subnet")
 
 	_ = flag.Value(s)
 	flag.Var(s, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
@@ -146,6 +162,10 @@ func (s *ServerConfig) parseEnv() error {
 		s.ConfigFile = config
 	}
 
+	if trustedSubnet := os.Getenv("TRUSTED_SUBNET"); trustedSubnet != "" {
+		s.Net.CIDR = trustedSubnet
+	}
+
 	return nil
 }
 
@@ -174,6 +194,7 @@ func (s *ServerConfig) UnmarshalJSON(b []byte) error {
 		StoreFile     string `json:"store_file"`
 		DatabaseDSN   string `json:"database_dsn"`
 		CryptoKey     string `json:"crypto_key"`
+		TrustedSubnet string `json:"trusted_subnet"`
 	}
 
 	if err = json.Unmarshal(b, &cfg); err != nil {
@@ -210,6 +231,20 @@ func (s *ServerConfig) UnmarshalJSON(b []byte) error {
 	if s.CryptoKey == "" && cfg.CryptoKey != "" {
 		s.CryptoKey = cfg.CryptoKey
 	}
+
+	if s.Net.CIDR == "" && cfg.TrustedSubnet != "" {
+		s.Net.CIDR = cfg.TrustedSubnet
+	}
+
+	return nil
+}
+
+func (s *ServerConfig) ParseNet() error {
+	_, ipv4Net, err := net.ParseCIDR(s.Net.CIDR)
+	if err != nil {
+		return fmt.Errorf("invalid CIDR: %w", err)
+	}
+	s.Net.TrustedSubnet = ipv4Net
 
 	return nil
 }

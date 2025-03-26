@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"sync"
 	"syscall"
@@ -136,7 +137,7 @@ func (a *Agent) Run(ctx context.Context) {
 							log.Printf("Worker: %d, Failed sending metric: %s", r.worker, r.err.Error())
 							continue
 						}
-						log.Printf(" Worker: %d Metric sent, Code: %d, URL: %s, Body: %s\n", r.worker, r.response.StatusCode(), r.response.Request.URL, r.response.Request.Body)
+						log.Printf(" Worker: %d Metric sent, Code: %d, URL: %s", r.worker, r.response.StatusCode(), r.response.Request.URL)
 					}
 				}(res)
 			}
@@ -172,10 +173,10 @@ func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyRespo
 		}
 
 		// Формирование и выполнение запроса
-		result.response, result.err = withRetry(a.withSign(a.client.R().
+		result.response, result.err = withRetry(a.withSign(a.withRealIP(a.client.R().
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Accept-Encoding", "gzip").
-			SetBody(body)), URL, i)
+			SetBody(body))), URL, i)
 
 		// Запись в результирующий канал
 		res <- result
@@ -239,6 +240,25 @@ func withRetry(request *resty.Request, URL string, w int) (*resty.Response, erro
 	}
 
 	return nil, err
+}
+
+func (a *Agent) withRealIP(request *resty.Request) *resty.Request {
+	interfaces, err := net.InterfaceAddrs()
+	if err != nil {
+		log.Printf("failed to get interface addresses: %s", err.Error())
+		return request
+	}
+
+	for _, v := range interfaces {
+		if ipnet, ok := v.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				request.Header.Add("X-Real-IP", ipnet.IP.String())
+				break
+			}
+		}
+	}
+
+	return request
 }
 
 // Шифрует тело запроса при наличии флага сертификата

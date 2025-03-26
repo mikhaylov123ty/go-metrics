@@ -39,6 +39,8 @@ func main() {
 		log.Fatal("Build Logger Config Error:", err)
 	}
 
+	loggerInstance.Debugf("Config: %+v\n", *cfg)
+
 	// Инициализация инстанса хранения данных
 	var storageCommands *api.StorageCommands
 	switch {
