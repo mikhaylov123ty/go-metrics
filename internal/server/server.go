@@ -163,6 +163,8 @@ func (s *Server) Start(ctx context.Context, host *config.Host) error {
 		log.Fatal("HTTP Server Shutdown Failed:", err)
 	}
 
+	gRPCServer.GracefulStop()
+
 	// Ожидание завершения горутин
 	wg.Wait()
 

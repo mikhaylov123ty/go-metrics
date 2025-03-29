@@ -77,11 +77,14 @@ func (h *Handler) PostUpdates(ctx context.Context, request *pb.PostUpdatesReques
 
 	storageData := make([]*models.Data, len(request.Metric))
 	for i, v := range request.Metric {
-		// Десериализация тела запроса
-		storageData[i].Type = v.Type
-		storageData[i].Name = v.Id
-		storageData[i].Value = &v.Value
-		storageData[i].Delta = &v.Delta
+		storageData[i] = &models.Data{
+			Type:  v.Type,
+			Name:  v.Id,
+			Value: &v.Value,
+			Delta: &v.Delta,
+		}
+
+		// TODO пустая дата тут уже проинициализировни, надо сделать проверку на дефолтное значение
 
 		// Проверка невалидных значений
 		if err = storageData[i].CheckData(); err != nil {
