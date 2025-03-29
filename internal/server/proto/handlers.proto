@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package server_grpc;
+
+option go_package = "internal/server/proto";
+
+message Metric {
+  string id = 1;
+  string type = 2;
+  double value = 3;
+  int64 delta = 4;
+}
+
+message PostUpdateRequest {
+  Metric metric = 1;
+}
+
+message PostUpdateResponse {
+  string error = 1; // ошибка
+}
+
+message PostUpdatesRequest {
+ repeated Metric metrics = 1;
+}
+
+message PostUpdatesResponse {
+  string error = 1; // ошибка
+}
+
+message GetValueRequest {
+  string id = 1;
+}
+
+message GetValueResponse {
+Metric metric = 1;
+}
+
+
+service Handlers {
+  rpc PostUpdate(PostUpdateRequest) returns (PostUpdateResponse);
+  rpc PostUpdates(PostUpdatesRequest) returns (PostUpdatesResponse);
+  rpc GetValue(GetValueRequest) returns (GetValueResponse);
+}

@@ -43,9 +43,9 @@ type pinger interface {
 }
 
 // Конструктор хендлера
-func NewHandler(storageCommands *StorageCommands) *Handler {
+func NewHandler(apiStorageCommands *StorageCommands) *Handler {
 	return &Handler{
-		storageCommands: storageCommands,
+		storageCommands: apiStorageCommands,
 	}
 }
 

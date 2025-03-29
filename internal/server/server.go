@@ -11,8 +11,11 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
+	"fmt"
+
 	"io"
 	"log"
+
 	"net"
 	"net/http"
 	"os"
@@ -22,11 +25,14 @@ import (
 
 	"metrics/internal/server/api"
 	"metrics/internal/server/config"
+	"metrics/internal/server/gRPC"
 	"metrics/internal/server/metrics"
+	pb "metrics/internal/server/proto"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 // Server - структура сервера
@@ -39,8 +45,9 @@ type Server struct {
 
 // services - структура команд БД и файла с бэкапом
 type services struct {
-	storageCommands    *api.StorageCommands
-	metricsFileStorage *metrics.MetricsFileStorage
+	apiStorageCommands  *api.StorageCommands
+	gRPCStorageCommands *gRPC.StorageCommands
+	metricsFileStorage  *metrics.MetricsFileStorage
 }
 
 type options struct {
@@ -56,11 +63,17 @@ type auth struct {
 }
 
 // New - конструктор инстанса сервера
-func New(storageCommands *api.StorageCommands, metricsFileStorage *metrics.MetricsFileStorage, logger *logrus.Logger, cfg *config.ServerConfig) *Server {
+func New(
+	apiStorageCommands *api.StorageCommands,
+	gRPCStorageCommands *gRPC.StorageCommands,
+	metricsFileStorage *metrics.MetricsFileStorage,
+	logger *logrus.Logger,
+	cfg *config.ServerConfig) *Server {
 	return &Server{
 		services: services{
-			storageCommands:    storageCommands,
-			metricsFileStorage: metricsFileStorage,
+			apiStorageCommands:  apiStorageCommands,
+			gRPCStorageCommands: gRPCStorageCommands,
+			metricsFileStorage:  metricsFileStorage,
 		},
 		logger: logger,
 		options: options{
@@ -77,7 +90,7 @@ func New(storageCommands *api.StorageCommands, metricsFileStorage *metrics.Metri
 }
 
 // Start запускает сервера
-func (s *Server) Start(ctx context.Context, address string) error {
+func (s *Server) Start(ctx context.Context, host *config.Host) error {
 	// Инициализация даты из файла
 	if s.options.restore {
 		if err := s.services.metricsFileStorage.InitMetricsFromFile(); err != nil {
@@ -92,6 +105,7 @@ func (s *Server) Start(ctx context.Context, address string) error {
 
 	// Запуск горутины сохранения метрик с интервалом
 	go func() {
+		s.logger.Infof("Starting store metrics worker. Interval: %f", s.options.storeInterval)
 		defer wg.Done()
 		for {
 			//Останавливает горутину, если получен сигнал
@@ -109,18 +123,35 @@ func (s *Server) Start(ctx context.Context, address string) error {
 		}
 	}()
 
+	// HTTP Server
 	// Создание роутера
 	router := chi.NewRouter()
 
 	// Назначение соответствий хендлеров
-	s.addHandlers(router, api.NewHandler(s.services.storageCommands))
+	s.addHandlers(router, api.NewHandler(s.services.apiStorageCommands))
 
 	// Старт сервера
-	srv := http.Server{Addr: address, Handler: router}
+	httpSRV := http.Server{Addr: host.String(), Handler: router}
 	go func() {
-		s.logger.Infof("Starting server on %v", address)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		s.logger.Infof("Starting server on %v", host.String())
+		if err := httpSRV.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal("HTTP Server Error:", err)
+		}
+	}()
+
+	// gRPC Server
+	listen, err := net.Listen("tcp", ":"+host.GRPCPort)
+	if err != nil {
+		return fmt.Errorf("gRPC could not listen on %v: %v", host.GRPCPort, err)
+	}
+
+	gRPCServer := grpc.NewServer()
+	pb.RegisterHandlersServer(gRPCServer, gRPC.NewHandler(s.services.gRPCStorageCommands))
+
+	go func() {
+		s.logger.Infof("Starting gRPC server on %v", host.GRPCPort)
+		if err = gRPCServer.Serve(listen); err != nil {
+			log.Fatal("gRPC Server Error:", err)
 		}
 	}()
 
@@ -128,7 +159,7 @@ func (s *Server) Start(ctx context.Context, address string) error {
 	<-ctx.Done()
 
 	// Остановка сервера
-	if err := srv.Shutdown(ctx); err != nil && err != context.Canceled {
+	if err := httpSRV.Shutdown(ctx); err != nil && err != context.Canceled {
 		log.Fatal("HTTP Server Shutdown Failed:", err)
 	}
 
@@ -195,7 +226,7 @@ func (s *Server) withLogger(next http.Handler) http.Handler {
 		if !ok {
 			requestID = "unknown"
 		}
-		
+
 		s.logger.Infof("Incoming HTTP Request: URI: %s, Method: %v, Time Duration: %v, Request ID: %v", r.RequestURI, r.Method, time.Since(start), requestID)
 		s.logger.Infof("Outgoing HTTP Response: Status Code: %v, Content Length:%v, Request ID: %v\"", lw.ResponseData.Status, lw.ResponseData.Size, requestID)
 	})
