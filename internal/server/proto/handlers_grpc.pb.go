@@ -20,7 +20,6 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	Handlers_PostUpdates_FullMethodName = "/server_grpc.Handlers/PostUpdates"
-	Handlers_GetValue_FullMethodName    = "/server_grpc.Handlers/GetValue"
 )
 
 // HandlersClient is the client API for Handlers service.
@@ -28,7 +27,6 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type HandlersClient interface {
 	PostUpdates(ctx context.Context, in *PostUpdatesRequest, opts ...grpc.CallOption) (*PostUpdatesResponse, error)
-	GetValue(ctx context.Context, in *GetValueRequest, opts ...grpc.CallOption) (*GetValueResponse, error)
 }
 
 type handlersClient struct {
@@ -49,22 +47,11 @@ func (c *handlersClient) PostUpdates(ctx context.Context, in *PostUpdatesRequest
 	return out, nil
 }
 
-func (c *handlersClient) GetValue(ctx context.Context, in *GetValueRequest, opts ...grpc.CallOption) (*GetValueResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetValueResponse)
-	err := c.cc.Invoke(ctx, Handlers_GetValue_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // HandlersServer is the server API for Handlers service.
 // All implementations must embed UnimplementedHandlersServer
 // for forward compatibility.
 type HandlersServer interface {
 	PostUpdates(context.Context, *PostUpdatesRequest) (*PostUpdatesResponse, error)
-	GetValue(context.Context, *GetValueRequest) (*GetValueResponse, error)
 	mustEmbedUnimplementedHandlersServer()
 }
 
@@ -77,9 +64,6 @@ type UnimplementedHandlersServer struct{}
 
 func (UnimplementedHandlersServer) PostUpdates(context.Context, *PostUpdatesRequest) (*PostUpdatesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PostUpdates not implemented")
-}
-func (UnimplementedHandlersServer) GetValue(context.Context, *GetValueRequest) (*GetValueResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetValue not implemented")
 }
 func (UnimplementedHandlersServer) mustEmbedUnimplementedHandlersServer() {}
 func (UnimplementedHandlersServer) testEmbeddedByValue()                  {}
@@ -120,24 +104,6 @@ func _Handlers_PostUpdates_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Handlers_GetValue_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetValueRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(HandlersServer).GetValue(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Handlers_GetValue_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(HandlersServer).GetValue(ctx, req.(*GetValueRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // Handlers_ServiceDesc is the grpc.ServiceDesc for Handlers service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -148,10 +114,6 @@ var Handlers_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PostUpdates",
 			Handler:    _Handlers_PostUpdates_Handler,
-		},
-		{
-			MethodName: "GetValue",
-			Handler:    _Handlers_GetValue_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

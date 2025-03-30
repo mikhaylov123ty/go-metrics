@@ -21,60 +21,16 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type Metric struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Metric) Reset() {
-	*x = Metric{}
-	mi := &file_internal_server_proto_handlers_proto_msgTypes[0]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Metric) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Metric) ProtoMessage() {}
-
-func (x *Metric) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_server_proto_handlers_proto_msgTypes[0]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Metric.ProtoReflect.Descriptor instead.
-func (*Metric) Descriptor() ([]byte, []int) {
-	return file_internal_server_proto_handlers_proto_rawDescGZIP(), []int{0}
-}
-
-func (x *Metric) GetData() []byte {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
 type PostUpdatesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Metrics       []*Metric              `protobuf:"bytes,1,rep,name=metrics,proto3" json:"metrics,omitempty"`
+	Metrics       []byte                 `protobuf:"bytes,1,opt,name=metrics,proto3" json:"metrics,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PostUpdatesRequest) Reset() {
 	*x = PostUpdatesRequest{}
-	mi := &file_internal_server_proto_handlers_proto_msgTypes[1]
+	mi := &file_internal_server_proto_handlers_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -86,7 +42,7 @@ func (x *PostUpdatesRequest) String() string {
 func (*PostUpdatesRequest) ProtoMessage() {}
 
 func (x *PostUpdatesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_server_proto_handlers_proto_msgTypes[1]
+	mi := &file_internal_server_proto_handlers_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -99,10 +55,10 @@ func (x *PostUpdatesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PostUpdatesRequest.ProtoReflect.Descriptor instead.
 func (*PostUpdatesRequest) Descriptor() ([]byte, []int) {
-	return file_internal_server_proto_handlers_proto_rawDescGZIP(), []int{1}
+	return file_internal_server_proto_handlers_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *PostUpdatesRequest) GetMetrics() []*Metric {
+func (x *PostUpdatesRequest) GetMetrics() []byte {
 	if x != nil {
 		return x.Metrics
 	}
@@ -118,7 +74,7 @@ type PostUpdatesResponse struct {
 
 func (x *PostUpdatesResponse) Reset() {
 	*x = PostUpdatesResponse{}
-	mi := &file_internal_server_proto_handlers_proto_msgTypes[2]
+	mi := &file_internal_server_proto_handlers_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -130,7 +86,7 @@ func (x *PostUpdatesResponse) String() string {
 func (*PostUpdatesResponse) ProtoMessage() {}
 
 func (x *PostUpdatesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_server_proto_handlers_proto_msgTypes[2]
+	mi := &file_internal_server_proto_handlers_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -143,7 +99,7 @@ func (x *PostUpdatesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PostUpdatesResponse.ProtoReflect.Descriptor instead.
 func (*PostUpdatesResponse) Descriptor() ([]byte, []int) {
-	return file_internal_server_proto_handlers_proto_rawDescGZIP(), []int{2}
+	return file_internal_server_proto_handlers_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *PostUpdatesResponse) GetError() string {
@@ -153,112 +109,17 @@ func (x *PostUpdatesResponse) GetError() string {
 	return ""
 }
 
-type GetValueRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetValueRequest) Reset() {
-	*x = GetValueRequest{}
-	mi := &file_internal_server_proto_handlers_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetValueRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetValueRequest) ProtoMessage() {}
-
-func (x *GetValueRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_server_proto_handlers_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetValueRequest.ProtoReflect.Descriptor instead.
-func (*GetValueRequest) Descriptor() ([]byte, []int) {
-	return file_internal_server_proto_handlers_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *GetValueRequest) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-type GetValueResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Metric        *Metric                `protobuf:"bytes,1,opt,name=metric,proto3" json:"metric,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetValueResponse) Reset() {
-	*x = GetValueResponse{}
-	mi := &file_internal_server_proto_handlers_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetValueResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetValueResponse) ProtoMessage() {}
-
-func (x *GetValueResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_server_proto_handlers_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetValueResponse.ProtoReflect.Descriptor instead.
-func (*GetValueResponse) Descriptor() ([]byte, []int) {
-	return file_internal_server_proto_handlers_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *GetValueResponse) GetMetric() *Metric {
-	if x != nil {
-		return x.Metric
-	}
-	return nil
-}
-
 var File_internal_server_proto_handlers_proto protoreflect.FileDescriptor
 
 const file_internal_server_proto_handlers_proto_rawDesc = "" +
 	"\n" +
-	"$internal/server/proto/handlers.proto\x12\vserver_grpc\"\x1c\n" +
-	"\x06Metric\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data\"C\n" +
-	"\x12PostUpdatesRequest\x12-\n" +
-	"\ametrics\x18\x01 \x03(\v2\x13.server_grpc.MetricR\ametrics\"+\n" +
+	"$internal/server/proto/handlers.proto\x12\vserver_grpc\".\n" +
+	"\x12PostUpdatesRequest\x12\x18\n" +
+	"\ametrics\x18\x01 \x01(\fR\ametrics\"+\n" +
 	"\x13PostUpdatesResponse\x12\x14\n" +
-	"\x05error\x18\x01 \x01(\tR\x05error\"!\n" +
-	"\x0fGetValueRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"?\n" +
-	"\x10GetValueResponse\x12+\n" +
-	"\x06metric\x18\x01 \x01(\v2\x13.server_grpc.MetricR\x06metric2\xa5\x01\n" +
+	"\x05error\x18\x01 \x01(\tR\x05error2\\\n" +
 	"\bHandlers\x12P\n" +
-	"\vPostUpdates\x12\x1f.server_grpc.PostUpdatesRequest\x1a .server_grpc.PostUpdatesResponse\x12G\n" +
-	"\bGetValue\x12\x1c.server_grpc.GetValueRequest\x1a\x1d.server_grpc.GetValueResponseB\x17Z\x15internal/server/protob\x06proto3"
+	"\vPostUpdates\x12\x1f.server_grpc.PostUpdatesRequest\x1a .server_grpc.PostUpdatesResponseB\x17Z\x15internal/server/protob\x06proto3"
 
 var (
 	file_internal_server_proto_handlers_proto_rawDescOnce sync.Once
@@ -272,26 +133,19 @@ func file_internal_server_proto_handlers_proto_rawDescGZIP() []byte {
 	return file_internal_server_proto_handlers_proto_rawDescData
 }
 
-var file_internal_server_proto_handlers_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_internal_server_proto_handlers_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_internal_server_proto_handlers_proto_goTypes = []any{
-	(*Metric)(nil),              // 0: server_grpc.Metric
-	(*PostUpdatesRequest)(nil),  // 1: server_grpc.PostUpdatesRequest
-	(*PostUpdatesResponse)(nil), // 2: server_grpc.PostUpdatesResponse
-	(*GetValueRequest)(nil),     // 3: server_grpc.GetValueRequest
-	(*GetValueResponse)(nil),    // 4: server_grpc.GetValueResponse
+	(*PostUpdatesRequest)(nil),  // 0: server_grpc.PostUpdatesRequest
+	(*PostUpdatesResponse)(nil), // 1: server_grpc.PostUpdatesResponse
 }
 var file_internal_server_proto_handlers_proto_depIdxs = []int32{
-	0, // 0: server_grpc.PostUpdatesRequest.metrics:type_name -> server_grpc.Metric
-	0, // 1: server_grpc.GetValueResponse.metric:type_name -> server_grpc.Metric
-	1, // 2: server_grpc.Handlers.PostUpdates:input_type -> server_grpc.PostUpdatesRequest
-	3, // 3: server_grpc.Handlers.GetValue:input_type -> server_grpc.GetValueRequest
-	2, // 4: server_grpc.Handlers.PostUpdates:output_type -> server_grpc.PostUpdatesResponse
-	4, // 5: server_grpc.Handlers.GetValue:output_type -> server_grpc.GetValueResponse
-	4, // [4:6] is the sub-list for method output_type
-	2, // [2:4] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0, // 0: server_grpc.Handlers.PostUpdates:input_type -> server_grpc.PostUpdatesRequest
+	1, // 1: server_grpc.Handlers.PostUpdates:output_type -> server_grpc.PostUpdatesResponse
+	1, // [1:2] is the sub-list for method output_type
+	0, // [0:1] is the sub-list for method input_type
+	0, // [0:0] is the sub-list for extension type_name
+	0, // [0:0] is the sub-list for extension extendee
+	0, // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_internal_server_proto_handlers_proto_init() }
@@ -305,7 +159,7 @@ func file_internal_server_proto_handlers_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_server_proto_handlers_proto_rawDesc), len(file_internal_server_proto_handlers_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

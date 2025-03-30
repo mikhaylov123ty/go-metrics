@@ -62,10 +62,10 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 		}
 		defer conn.Close()
 
-		client = grpcClient.NewClient(pb.NewHandlersClient(conn))
+		client = grpcClient.New(pb.NewHandlersClient(conn), cfg.Key, attempts, interval)
 	} else {
 		baseURL := "http://" + cfg.String()
-		client = httpClient.NewHTTPClient(baseURL, cfg.Key, resty.New())
+		client = httpClient.New(resty.New(), baseURL, cfg.Key, attempts, interval)
 	}
 
 	return &Agent{
@@ -107,7 +107,6 @@ func (a *Agent) Run(ctx context.Context) {
 		}
 	}()
 
-	//TODO switch postHTTP? OR
 	// Ограничение рабочих, которые выполняют одновременные запросы к серверу
 	for i := range a.rateLimit - 1 {
 		go a.postWorker(i, jobs, res)
@@ -196,7 +195,7 @@ func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *jobRespons
 	}
 }
 
-// TODO remove url
+// TODO depreciate data to struct
 // Метод отправки метрик батчами
 func (a *Agent) sendMetricsBatch(jobs chan<- *metricJob) error {
 	// Сериализация метрик

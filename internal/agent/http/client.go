@@ -5,8 +5,8 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"golang.org/x/net/bpf"
 	"log"
 	"syscall"
 	"time"
@@ -22,44 +22,49 @@ const (
 )
 
 type HTTPClient struct {
-	client  *resty.Client
-	baseURL string
-	key     string
+	client   *resty.Client
+	baseURL  string
+	key      string
+	attempts int
+	interval time.Duration
 }
 
-type httpRequest resty.Request
+type httpRequest struct {
+	*resty.Request
+}
 
 type httpResponse struct {
 	response *resty.Response
 	err      error
 }
 
-func NewHTTPClient(baseURL string, key string, client *resty.Client) *HTTPClient {
+func New(client *resty.Client, baseURL string, key string, attempts int, interval time.Duration) *HTTPClient {
 	return &HTTPClient{
-		baseURL: baseURL,
-		key:     key,
-		client:  client,
+		client:   client,
+		baseURL:  baseURL,
+		key:      key,
+		attempts: attempts,
+		interval: interval,
 	}
 }
 
 func (h *HTTPClient) PostUpdates(ctx context.Context, body []byte) error {
-	request := httpRequest(*h.client.R().
+	request := httpRequest{h.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Accept-Encoding", "gzip").
-		SetBody(body)).
+		SetBody(body)}
+	if err := request.
 		withRealIP().
-		withSign(h.key)
+		withSign(h.key).
+		doWithRetry(h.attempts, h.baseURL+batchHandlerPath, h.interval); err != nil {
+		return err
+	}
 
-	// Обработка тела запроса
-
-	// Формирование и выполнение запроса
-
-	// Запись в результирующий канал
-	res <- result
+	return nil
 }
 
 // Middleware для запросов с подписью
-func (req httpRequest) withSign(key string) *httpRequest {
+func (req *httpRequest) withSign(key string) *httpRequest {
 	if key != "" {
 		h := hmac.New(sha256.New, []byte(key))
 		h.Write([]byte(fmt.Sprintf("%s", req.Body)))
@@ -68,10 +73,10 @@ func (req httpRequest) withSign(key string) *httpRequest {
 		req.Header.Add("HashSHA256", hash)
 	}
 
-	return &req
+	return req
 }
 
-func (req httpRequest) withRealIP() *httpRequest {
+func (req *httpRequest) withRealIP() *httpRequest {
 	interfaces, err := net.InterfaceAddrs()
 	if err != nil {
 		log.Printf("failed to get interface addresses: %s", err.Error())
@@ -85,24 +90,25 @@ func (req httpRequest) withRealIP() *httpRequest {
 			}
 		}
 	}
-	return &req
+
+	return req
 }
 
 // Middleware повтора функции отправки метрик на сервер
-func (h httpRequest) withRetry(ctx context.Context) error {
+func (req *httpRequest) doWithRetry(attempts int, url string, interval time.Duration) error {
 	var err error
 	wait := 1 * time.Second
 
 	// Попытки выполнения запроса и возврат при успешном выполнении
 	for range attempts {
-		err = poster.PostUpdates(ctx, body)
+		_, err = req.Post(url)
 		if err == nil {
 			return nil
 		}
 		// Проверка ошибки для сценария недоступности сервера
 		switch {
 		case errors.Is(err, syscall.ECONNREFUSED):
-			log.Printf("Worker: %d, retrying after error: %s\n", w, err.Error())
+			log.Printf("Worker: TODO HERE, retrying after error: %s\n", err.Error())
 			time.Sleep(wait)
 			wait += interval
 
