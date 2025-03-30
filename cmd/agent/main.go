@@ -10,8 +10,8 @@ import (
 	"sync"
 	"syscall"
 
-	"metrics/internal/client"
-	"metrics/internal/client/config"
+	"metrics/internal/agent"
+	"metrics/internal/agent/config"
 )
 
 var (
@@ -32,7 +32,7 @@ func main() {
 	}
 
 	// Инициализация инстанса агента
-	agentInstance := client.NewAgent(cfg)
+	agentInstance := agent.NewAgent(cfg)
 
 	// Создание контекста с сигналами
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)

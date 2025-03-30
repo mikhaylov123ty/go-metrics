@@ -13,14 +13,18 @@ import (
 
 // AgentConfig - структура конфигурации агента
 type AgentConfig struct {
-	Host           string
-	Port           string
+	Host           *Host
+	ConfigFile     string
 	ReportInterval float64
 	PollInterval   float64
-	Key            string
 	RateLimit      int
+	Key            string
 	CryptoKey      string
-	ConfigFile     string
+}
+type Host struct {
+	Address  string
+	HTTPPort string
+	GRPCPort string
 }
 
 // New - конструктор конфигурации агента
@@ -49,8 +53,8 @@ func New() (*AgentConfig, error) {
 // parseFlags - Парсинг инструкций флагов агента
 func (a *AgentConfig) parseFlags() {
 	// Базовые флаги
-	flag.StringVar(&a.Host, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
-	flag.StringVar(&a.Port, "port", "8080", "Port on which to listen. Example: \"8081\"")
+	flag.StringVar(&a.Host.Address, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
+	flag.StringVar(&a.Host.HTTPPort, "port", "8080", "Port on which to listen. Example: \"8081\"")
 
 	// Флаги интервалов метрик
 	flag.Float64Var(&a.ReportInterval, "r", 0, "Metrics send interval in seconds.")
@@ -68,7 +72,7 @@ func (a *AgentConfig) parseFlags() {
 	// Флаг файла конфигурации
 	flag.StringVar(&a.ConfigFile, "config", "", "Config file")
 
-	_ = flag.Value(a)
+	_ = flag.Value(a.Host)
 	flag.Var(a, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
 
 	flag.Parse()
@@ -151,7 +155,7 @@ func (a *AgentConfig) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("failed to unmarshal config file: %w", err)
 	}
 
-	if (a.Host == "" && a.Port == "") && cfg.Address != "" {
+	if (a.Host.Address == "" && a.Host.HTTPPort == "") && cfg.Address != "" {
 		if err = a.Set(cfg.Address); err != nil {
 			return fmt.Errorf("error parsing address: %w", err)
 		}

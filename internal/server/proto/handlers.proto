@@ -5,18 +5,7 @@ package server_grpc;
 option go_package = "internal/server/proto";
 
 message Metric {
-  string id = 1;
-  string type = 2;
-  double value = 3;
-  int64 delta = 4;
-}
-
-message PostUpdateRequest {
-  Metric metric = 1;
-}
-
-message PostUpdateResponse {
-  string error = 1; // ошибка
+  bytes data= 1;
 }
 
 message PostUpdatesRequest {
@@ -37,7 +26,6 @@ Metric metric = 1;
 
 
 service Handlers {
-  rpc PostUpdate(PostUpdateRequest) returns (PostUpdateResponse);
   rpc PostUpdates(PostUpdatesRequest) returns (PostUpdatesResponse);
   rpc GetValue(GetValueRequest) returns (GetValueResponse);
 }

@@ -28,7 +28,6 @@ type dataReader interface {
 
 // dataUpdater - интерфейс хендлера для записи в базу
 type dataUpdater interface {
-	Update(*models.Data) error
 	UpdateBatch([]*models.Data) error
 }
 
@@ -45,30 +44,6 @@ func NewStorageService(dataReader dataReader, dataUpdater dataUpdater) *StorageC
 		dataReader:  dataReader,
 		dataUpdater: dataUpdater,
 	}
-}
-
-func (h *Handler) PostUpdate(ctx context.Context, request *pb.PostUpdateRequest) (*pb.PostUpdateResponse, error) {
-	var err error
-	var response pb.PostUpdateResponse
-	// Десериализация тела запроса
-	storageData := models.Data{
-		Type:  request.Metric.Type,
-		Name:  request.Metric.Id,
-		Value: &request.Metric.Value,
-		Delta: &request.Metric.Delta,
-	}
-	// Проверка невалидных значений
-	if err = storageData.CheckData(); err != nil {
-		return nil, status.Errorf(codes.Internal, "data values error: %s", err.Error())
-	}
-
-	// Обновление или сохранение новой записи в хранилище
-	if err = h.storageCommands.Update(&storageData); err != nil {
-		log.Println("UpdatePostJSON: update handler error:", err)
-		return nil, status.Errorf(codes.Internal, "update handler error: %s", err.Error())
-	}
-
-	return &response, nil
 }
 
 func (h *Handler) PostUpdates(ctx context.Context, request *pb.PostUpdatesRequest) (*pb.PostUpdatesResponse, error) {

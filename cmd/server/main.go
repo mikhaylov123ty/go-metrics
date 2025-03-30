@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"metrics/internal/server/gRPC"
+
 	"os/signal"
 	"syscall"
 
 	"metrics/internal/server"
 	"metrics/internal/server/api"
 	"metrics/internal/server/config"
+	"metrics/internal/server/gRPC"
 	"metrics/internal/server/metrics"
 	"metrics/internal/storage/memory"
 	"metrics/internal/storage/psql"
