@@ -32,7 +32,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 )
 
 // Server - структура сервера
@@ -98,7 +97,7 @@ func (s *Server) Start(ctx context.Context, host *config.Host) error {
 		}
 		s.logger.Infof("metrics file storage restored")
 	}
-
+	fmt.Printf("AUTH: %+v\n", s.auth)
 	// Создание группы ожидания
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -145,12 +144,12 @@ func (s *Server) Start(ctx context.Context, host *config.Host) error {
 		return fmt.Errorf("gRPC could not listen on %v: %v", host.GRPCPort, err)
 	}
 
-	gRPCServer := grpc.NewServer()
-	pb.RegisterHandlersServer(gRPCServer, gRPC.NewHandler(s.services.gRPCStorageCommands))
+	gRPCServer := gRPC.NewServer(s.auth.cryptoKey)
+	pb.RegisterHandlersServer(gRPCServer.Server, gRPC.NewHandler(s.services.gRPCStorageCommands))
 
 	go func() {
 		s.logger.Infof("Starting gRPC server on %v", host.GRPCPort)
-		if err = gRPCServer.Serve(listen); err != nil {
+		if err = gRPCServer.Server.Serve(listen); err != nil {
 			log.Fatal("gRPC Server Error:", err)
 		}
 	}()
@@ -163,7 +162,7 @@ func (s *Server) Start(ctx context.Context, host *config.Host) error {
 		log.Fatal("HTTP Server Shutdown Failed:", err)
 	}
 
-	gRPCServer.GracefulStop()
+	gRPCServer.Server.GracefulStop()
 
 	// Ожидание завершения горутин
 	wg.Wait()
@@ -177,6 +176,7 @@ func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
 		middleware.RequestID,
 		s.withLogger,
 		s.withTrustedSubnet,
+		s.withHash,
 		s.withGZipEncode,
 	)
 
@@ -185,23 +185,23 @@ func (s *Server) addHandlers(router *chi.Mux, handler *api.Handler) {
 
 	// /update
 	router.Route("/update", func(r chi.Router) {
-		r.Post("/", s.withHash(s.withDecrypt(handler.UpdatePostJSON)))
-		r.Post("/{type}/{name}/{value}", s.withHash(handler.UpdatePost))
+		r.Post("/", s.withDecrypt(handler.UpdatePostJSON))
+		r.Post("/{type}/{name}/{value}", handler.UpdatePost)
 	})
 
 	// /updates
 	router.Route("/updates", func(r chi.Router) {
-		r.Post("/", s.withHash(s.withDecrypt(handler.UpdatesPostJSON)))
+		r.Post("/", s.withDecrypt(handler.UpdatesPostJSON))
 	})
 
 	// /value
 	router.Route("/value", func(r chi.Router) {
-		r.Post("/", s.withHash(s.withDecrypt(handler.ValueGetJSON)))
-		r.Get("/{type}/{name}", s.withHash(handler.ValueGet))
+		r.Post("/", s.withDecrypt(handler.ValueGetJSON))
+		r.Get("/{type}/{name}", handler.ValueGet)
 	})
 
 	// index
-	router.Get("/", s.withHash(handler.IndexGet))
+	router.Get("/", handler.IndexGet)
 
 	// /ping
 	router.Get("/ping", handler.PingGet)
@@ -271,8 +271,8 @@ func (s *Server) withGZipEncode(next http.Handler) http.Handler {
 }
 
 // middleware для эндпоинтов для хеширования и подписи
-func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) withHash(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		//Декодирование хедера
 		requestHeader, err := hex.DecodeString(r.Header.Get("HashSHA256"))
 		if err != nil {
@@ -317,13 +317,14 @@ func (s *Server) withHash(next http.HandlerFunc) http.HandlerFunc {
 			hashWriter.key = s.options.key
 		}
 
-		next(hashWriter, r)
-	}
+		next.ServeHTTP(hashWriter, r)
+	})
 }
 
 // Middleware для дешифровки тела запроса
 func (s *Server) withDecrypt(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// TODO вынести чтение файла в инит конфига
 		// Проверка флага приватнрго ключа
 		if s.auth.cryptoKey != "" {
 			// Чтение pem файла

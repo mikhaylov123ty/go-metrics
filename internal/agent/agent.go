@@ -3,6 +3,7 @@ package agent
 
 import (
 	"context"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"crypto/rand"
 	"crypto/rsa"
@@ -55,8 +56,12 @@ type Agent struct {
 func NewAgent(cfg *config.AgentConfig) *Agent {
 	var client UpdatesPoster
 
+	fmt.Println("CFG HOST", cfg.Host.Address)
+	fmt.Println("CFG HOST", cfg.Host.HTTPPort)
+	fmt.Println("CFG HOST", cfg.Host.GRPCPort)
+
 	if cfg.Host.GRPCPort != "" {
-		conn, err := grpc.NewClient(":" + cfg.Host.GRPCPort)
+		conn, err := grpc.NewClient(":"+cfg.Host.GRPCPort, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -64,7 +69,7 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 
 		client = grpcClient.New(pb.NewHandlersClient(conn), cfg.Key, attempts, interval)
 	} else {
-		baseURL := "http://" + cfg.String()
+		baseURL := "http://" + cfg.Host.String()
 		client = httpClient.New(resty.New(), baseURL, cfg.Key, attempts, interval)
 	}
 
@@ -185,6 +190,7 @@ func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *jobRespons
 			continue
 		}
 
+		fmt.Println("BODY", string(body))
 		if err = a.client.PostUpdates(context.Background(), body); err != nil {
 			log.Printf("Worker %d: PostUpdates failed: %s", i, err)
 			result.err = fmt.Errorf("post updates failed: %w", err)

@@ -2,8 +2,8 @@ package gRPC
 
 import (
 	"context"
-	"log"
-
+	"encoding/json"
+	"fmt"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -50,19 +50,17 @@ func (h *Handler) PostUpdates(ctx context.Context, request *pb.PostUpdatesReques
 	var err error
 	var response pb.PostUpdatesResponse
 
-	storageData := make([]*models.Data, len(request.Metric))
-	for i, v := range request.Metric {
-		storageData[i] = &models.Data{
-			Type:  v.Type,
-			Name:  v.Id,
-			Value: &v.Value,
-			Delta: &v.Delta,
-		}
+	storageData := []*models.Data{}
+	if err = json.Unmarshal(request.Metrics, &storageData); err != nil {
+		return nil, fmt.Errorf("UpdatesPostGRPC failed unmarshall request body: %w", err)
+	}
 
-		// TODO пустая дата тут уже проинициализировни, надо сделать проверку на дефолтное значение
+	// TODO пустая дата тут уже проинициализировни, надо сделать проверку на дефолтное значение
 
+	// Проверка невалидных значений
+	for _, data := range storageData {
 		// Проверка невалидных значений
-		if err = storageData[i].CheckData(); err != nil {
+		if err = data.CheckData(); err != nil {
 			return nil, status.Errorf(codes.Internal, "data values error: %s", err.Error())
 		}
 	}
@@ -73,23 +71,4 @@ func (h *Handler) PostUpdates(ctx context.Context, request *pb.PostUpdatesReques
 	}
 
 	return &response, nil
-}
-func (h *Handler) GetValue(ctx context.Context, request *pb.GetValueRequest) (*pb.GetValueResponse, error) {
-	var err error
-
-	metric, err := h.storageCommands.Read(request.Id)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "get handler error: %s", err.Error())
-	}
-
-	response := &pb.GetValueResponse{
-		Metric: &pb.Metric{
-			Type:  metric.Type,
-			Id:    metric.Name,
-			Value: *metric.Value,
-			Delta: *metric.Delta,
-		},
-	}
-
-	return response, nil
 }

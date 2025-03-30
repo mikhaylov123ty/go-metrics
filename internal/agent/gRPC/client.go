@@ -52,7 +52,9 @@ func (g *GRPCClient) PostUpdates(ctx context.Context, requestData []byte) error 
 	}
 
 	ctx = metadata.NewOutgoingContext(ctx, request.MD)
-	g.doWithRetry(ctx, request)
+	if err := g.doWithRetry(ctx, request); err != nil {
+		return fmt.Errorf("PostUpdates: %w", err)
+	}
 
 	return nil
 }
@@ -94,11 +96,13 @@ func withRealIP() requestOptions {
 	}
 }
 
+// TODO THERE IS INTERCEPTORS BEFORE AND AFTER
 func (g *GRPCClient) doWithRetry(ctx context.Context, request *gRPCRequest) error {
 	var err error
 	wait := 1 * time.Second
 
 	for range g.attempts {
+		fmt.Println("REQYEST", string(request.PostUpdatesRequest.Metrics))
 		_, err = g.client.PostUpdates(ctx, request.PostUpdatesRequest)
 		if err == nil {
 			return nil
@@ -115,4 +119,3 @@ func (g *GRPCClient) doWithRetry(ctx context.Context, request *gRPCRequest) erro
 
 	return err
 }
-	
