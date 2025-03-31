@@ -66,7 +66,6 @@ func (s *HTTPServer) addHandlers(router *chi.Mux, handler *Handler) {
 		middleware.RequestID,
 		s.withLogger,
 		s.withTrustedSubnet,
-		s.withHash,
 		s.withGZipEncode,
 	)
 
@@ -75,18 +74,18 @@ func (s *HTTPServer) addHandlers(router *chi.Mux, handler *Handler) {
 
 	// /update
 	router.Route("/update", func(r chi.Router) {
-		r.Post("/", s.withDecrypt(handler.UpdatePostJSON))
+		r.Post("/", s.withHash(s.withDecrypt(handler.UpdatePostJSON)))
 		r.Post("/{type}/{name}/{value}", handler.UpdatePost)
 	})
 
 	// /updates
 	router.Route("/updates", func(r chi.Router) {
-		r.Post("/", s.withDecrypt(handler.UpdatesPostJSON))
+		r.Post("/", s.withHash(s.withDecrypt(handler.UpdatesPostJSON)))
 	})
 
 	// /value
 	router.Route("/value", func(r chi.Router) {
-		r.Post("/", s.withDecrypt(handler.ValueGetJSON))
+		r.Post("/", s.withHash(s.withDecrypt(handler.ValueGetJSON)))
 		r.Get("/{type}/{name}", handler.ValueGet)
 	})
 
@@ -161,8 +160,8 @@ func (s *HTTPServer) withGZipEncode(next http.Handler) http.Handler {
 }
 
 // middleware для эндпоинтов для хеширования
-func (s *HTTPServer) withHash(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (s *HTTPServer) withHash(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		//Декодирование хедера
 		requestHeader, err := hex.DecodeString(r.Header.Get("HashSHA256"))
 		if err != nil {
@@ -207,8 +206,8 @@ func (s *HTTPServer) withHash(next http.Handler) http.Handler {
 			hashWriter.Key = s.auth.hashKey
 		}
 
-		next.ServeHTTP(hashWriter, r)
-	})
+		next(hashWriter, r)
+	}
 }
 
 // Middleware для дешифровки тела запроса
@@ -291,13 +290,13 @@ func (s *HTTPServer) withTrustedSubnet(next http.Handler) http.Handler {
 			requestIP := net.ParseIP(r.Header.Get("X-Real-IP"))
 			if requestIP == nil {
 				s.logger.Errorln("error parsing X-Real-IP header")
-				w.WriteHeader(http.StatusForbidden)
+				http.Error(w, "error parsing X-Real-IP header", http.StatusForbidden)
 				return
 			}
 
 			if !s.auth.trustedSubnet.Contains(requestIP) {
 				s.logger.Errorln("IP address is not trusted")
-				w.WriteHeader(http.StatusForbidden)
+				http.Error(w, "IP address is not trusted", http.StatusForbidden)
 				return
 			}
 		}

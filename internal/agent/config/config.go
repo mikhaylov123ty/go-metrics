@@ -54,7 +54,7 @@ func New() (*AgentConfig, error) {
 func (a *AgentConfig) parseFlags() {
 	// Базовые флаги
 	flag.StringVar(&a.Host.Address, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
-	flag.StringVar(&a.Host.HTTPPort, "port", "8080", "Port on which to listen. Example: \"8081\"")
+	flag.StringVar(&a.Host.HTTPPort, "http-port", "8080", "Port on which to listen. Example: \"8080\"")
 	flag.StringVar(&a.Host.GRPCPort, "grpc-port", "", "Port on which to listen gRPC requests. Example: \"4443\"")
 
 	// Флаги интервалов метрик

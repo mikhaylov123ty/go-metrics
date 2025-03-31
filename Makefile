@@ -1,9 +1,8 @@
-SERVER_PORT:=30011
-ADDRESS:="localhost:${SERVER_PORT}"
+SERVER_PORT:="30011"
 AGENT_ARGS:="-config ./cmd/agent/config.json"
 SERVER_ARGS:="-config ./cmd/server/config.json"
 TEMP_FILE:="temp_file"
-DSN = "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
+DSN:="postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
 
 build: buildAgent buildServer
 

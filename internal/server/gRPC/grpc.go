@@ -2,15 +2,18 @@ package gRPC
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
-
+	"google.golang.org/grpc/metadata"
 	pb "metrics/internal/server/proto"
+	"metrics/internal/server/utils"
 	"net"
 	"os"
 	"time"
@@ -78,6 +81,33 @@ func (g *GRPCServer) withTrustedSubnet(ctx context.Context, req any,
 
 func (g *GRPCServer) withHash(ctx context.Context, req any,
 	info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+	fmt.Println("WITH HASH", req.(*pb.PostUpdatesRequest))
+	if g.auth.hashKey != "" {
+		meta, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			return nil, fmt.Errorf("can't extract metadata from request")
+		}
+
+		var requestHeader []byte
+		header, ok := meta["hashsha256"]
+		if !ok {
+			return nil, fmt.Errorf("can't extract hash header from request")
+		}
+		requestHeader, err = hex.DecodeString(header[0])
+		if err != nil {
+			return nil, fmt.Errorf("can't decode hash header from request")
+		}
+
+		body := req.(*pb.PostUpdatesRequest).Metrics
+
+		// Вычисление и валидация хэша
+		hash := utils.GetHash(g.auth.hashKey, body)
+		fmt.Println("HASHES", hash, requestHeader)
+		if !hmac.Equal(hash, requestHeader) {
+			return nil, fmt.Errorf("hash does not match")
+		}
+	}
+
 	return handler(ctx, req)
 }
 

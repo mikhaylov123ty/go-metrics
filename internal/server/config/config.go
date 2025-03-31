@@ -218,7 +218,7 @@ func (s *ServerConfig) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("failed to unmarshal config file: %w", err)
 	}
 
-	if (s.Host.Address == "" && s.Host.HTTPPort == "") && cfg.Address != "" {
+	if (s.Host.Address == "" || s.Host.HTTPPort == "") && cfg.Address != "" {
 		if err = s.Host.Set(cfg.Address); err != nil {
 			return fmt.Errorf("error parsing address: %w", err)
 		}

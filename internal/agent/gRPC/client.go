@@ -16,8 +16,6 @@ import (
 	pb "metrics/internal/server/proto"
 )
 
-//TODO WHY CLIENT DOESN'T CALL 4443?
-
 type GRPCClient struct {
 	client   pb.HandlersClient
 	key      string
@@ -105,11 +103,11 @@ func (g *GRPCClient) doWithRetry(ctx context.Context, request *gRPCRequest) erro
 	wait := 1 * time.Second
 
 	for range g.attempts {
-		fmt.Println("REQYEST", string(request.PostUpdatesRequest.Metrics))
-		_, err = g.client.PostUpdates(context.Background(), request.PostUpdatesRequest)
+		response, err := g.client.PostUpdates(ctx, request.PostUpdatesRequest)
 		if err == nil {
 			return nil
 		}
+		fmt.Println("RESPONSE", response.String())
 		if e, ok := status.FromError(err); ok {
 			fmt.Println(e.Code(), e.Message())
 		} else {

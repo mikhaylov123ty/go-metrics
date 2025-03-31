@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"syscall"
 	"time"
 
@@ -53,11 +54,17 @@ func (h *HTTPClient) PostUpdates(ctx context.Context, body []byte) error {
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Accept-Encoding", "gzip").
 		SetBody(body)}
-	if err := request.
+	response, err := request.
 		withRealIP().
 		withSign(h.key).
-		doWithRetry(h.attempts, h.baseURL+batchHandlerPath, h.interval); err != nil {
+		doWithRetry(h.attempts, h.baseURL+batchHandlerPath, h.interval)
+	if err != nil {
 		return err
+	}
+
+	if response.StatusCode() != http.StatusOK {
+		fmt.Println(response.String())
+		return fmt.Errorf("http status code %d", response.StatusCode())
 	}
 
 	return nil
@@ -95,15 +102,17 @@ func (req *httpRequest) withRealIP() *httpRequest {
 }
 
 // Middleware повтора функции отправки метрик на сервер
-func (req *httpRequest) doWithRetry(attempts int, url string, interval time.Duration) error {
+func (req *httpRequest) doWithRetry(attempts int, url string, interval time.Duration) (*resty.Response, error) {
 	var err error
 	wait := 1 * time.Second
 
 	// Попытки выполнения запроса и возврат при успешном выполнении
 	for range attempts {
-		_, err = req.Post(url)
+		fmt.Println("URL:", url)
+		var response *resty.Response
+		response, err = req.Post(url)
 		if err == nil {
-			return nil
+			return response, nil
 		}
 		// Проверка ошибки для сценария недоступности сервера
 		switch {
@@ -114,9 +123,9 @@ func (req *httpRequest) doWithRetry(attempts int, url string, interval time.Dura
 
 		// Возврат ошибки по умолчанию
 		default:
-			return err
+			return nil, err
 		}
 	}
 
-	return err
+	return nil, err
 }
