@@ -8,11 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"syscall"
 	"time"
-
-	"net"
 
 	"github.com/go-resty/resty/v2"
 )

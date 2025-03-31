@@ -9,10 +9,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"metrics/internal/models"
 	"metrics/internal/storage/memory"
-
-	"github.com/stretchr/testify/assert"
 )
 
 var commands *StorageCommands

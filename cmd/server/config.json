@@ -1,7 +1,5 @@
 {
-  "address": "localhost:30011",
   "grpc_port": "4443",
-  "restore": true,
   "store_interval": "10s",
   "store_file": "./tempFileFromConfig.txt",
   "database_dsn": "",

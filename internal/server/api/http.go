@@ -10,18 +10,19 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/sirupsen/logrus"
-
 	"io"
 	"log"
-	"metrics/internal/server/utils"
 	"net"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/sirupsen/logrus"
+
+	"metrics/internal/server/utils"
 )
 
 type HTTPServer struct {

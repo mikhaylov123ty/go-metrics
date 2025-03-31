@@ -3,33 +3,27 @@ package agent
 
 import (
 	"context"
-	"google.golang.org/grpc/credentials/insecure"
-
 	"crypto/rand"
 	"crypto/rsa"
-
 	"crypto/x509"
-
 	"encoding/json"
 	"encoding/pem"
-
 	"fmt"
-	"google.golang.org/grpc"
 	"log"
-	grpcClient "metrics/internal/agent/gRPC"
-	httpClient "metrics/internal/agent/http"
-	pb "metrics/internal/server/proto"
-
 	"os"
 	"sync"
-
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"metrics/internal/agent/collector"
 	"metrics/internal/agent/config"
+	grpcClient "metrics/internal/agent/gRPC"
+	httpClient "metrics/internal/agent/http"
 	"metrics/internal/models"
+	pb "metrics/internal/server/proto"
 )
 
 const (

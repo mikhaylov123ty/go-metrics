@@ -150,7 +150,6 @@ func (a *AgentConfig) initConfigFile() error {
 func (a *AgentConfig) UnmarshalJSON(b []byte) error {
 	var err error
 	var cfg struct {
-		Address        string `json:"address"`
 		GRPCPort       string `json:"grpc_port"`
 		ReportInterval string `json:"report_interval"`
 		PollInterval   string `json:"poll_interval"`
@@ -159,12 +158,6 @@ func (a *AgentConfig) UnmarshalJSON(b []byte) error {
 
 	if err = json.Unmarshal(b, &cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal config file: %w", err)
-	}
-
-	if (a.Host.Address == "" && a.Host.HTTPPort == "") && cfg.Address != "" {
-		if err = a.Host.Set(cfg.Address); err != nil {
-			return fmt.Errorf("error parsing address: %w", err)
-		}
 	}
 
 	if a.Host.GRPCPort == "" && cfg.GRPCPort != "" {

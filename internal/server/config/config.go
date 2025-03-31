@@ -88,6 +88,9 @@ func New() (*ServerConfig, error) {
 		}
 	}
 
+	fmt.Println("ServerConfig:", config)
+	fmt.Println("ServerConfig Store:", *config.FileStorage)
+
 	return config, nil
 }
 
@@ -102,7 +105,7 @@ func (s *ServerConfig) parseFlags() {
 	flag.StringVar(&s.Logger.LogLevel, "l", "info", "Log level. Example: \"info\"")
 
 	// Флаги файлового хранилища
-	flag.Float64Var(&s.FileStorage.StoreInterval, "i", 2, "Interval in seconds, to store metrics in file.")
+	flag.Float64Var(&s.FileStorage.StoreInterval, "i", 0, "Interval in seconds, to store metrics in file.")
 	flag.StringVar(&s.FileStorage.FileStoragePath, "f", "", "Path to file to store metrics. Example: ./tempFile.txt")
 	flag.BoolVar(&s.FileStorage.Restore, "r", true, "Restore previous metrics from file.")
 
@@ -204,7 +207,6 @@ func (s *ServerConfig) initConfigFile() error {
 func (s *ServerConfig) UnmarshalJSON(b []byte) error {
 	var err error
 	var cfg struct {
-		Address       string `json:"address"`
 		GRPCPort      string `json:"grpc_port"`
 		Restore       bool   `json:"restore"`
 		StoreInterval string `json:"store_interval"`
@@ -216,12 +218,6 @@ func (s *ServerConfig) UnmarshalJSON(b []byte) error {
 
 	if err = json.Unmarshal(b, &cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal config file: %w", err)
-	}
-
-	if (s.Host.Address == "" || s.Host.HTTPPort == "") && cfg.Address != "" {
-		if err = s.Host.Set(cfg.Address); err != nil {
-			return fmt.Errorf("error parsing address: %w", err)
-		}
 	}
 
 	if s.Host.GRPCPort == "" && cfg.GRPCPort != "" {

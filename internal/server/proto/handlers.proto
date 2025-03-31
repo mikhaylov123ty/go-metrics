@@ -4,6 +4,8 @@ package server_grpc;
 
 option go_package = "internal/server/proto";
 
+//Агент общается с сервером только при передаче батчей,
+//к реализации единственный запрос
 message PostUpdatesRequest {
   bytes metrics= 1;
 }

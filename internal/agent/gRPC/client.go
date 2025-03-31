@@ -10,6 +10,8 @@ import (
 	"net"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -42,6 +44,8 @@ func (g *GRPCClient) PostUpdates(ctx context.Context, requestData []byte) error 
 		&pb.PostUpdatesRequest{Metrics: requestData},
 		metadata.New(map[string]string{}),
 	}
+
+	grpc.WithChainUnaryInterceptor()
 
 	decorators := []requestOptions{
 		withSign(g.key),
@@ -103,19 +107,22 @@ func (g *GRPCClient) doWithRetry(ctx context.Context, request *gRPCRequest) erro
 	wait := 1 * time.Second
 
 	for range g.attempts {
-		response, err := g.client.PostUpdates(ctx, request.PostUpdatesRequest)
+		_, err = g.client.PostUpdates(ctx, request.PostUpdatesRequest)
 		if err == nil {
 			return nil
 		}
-		fmt.Println("RESPONSE", response.String())
 		if e, ok := status.FromError(err); ok {
-			fmt.Println(e.Code(), e.Message())
+			switch e.Code() {
+			case codes.Unavailable:
+				log.Printf("Worker: TODO HERE, retrying after error: %s\n", err.Error())
+				time.Sleep(wait)
+				wait += g.interval
+			default:
+				return fmt.Errorf("post updates: Code: %s, Message: %s", e.Code(), e.Message())
+			}
 		} else {
 			fmt.Printf("Can't parse error: %s\n", err.Error())
 		}
-		log.Printf("Worker: TODO HERE, retrying after error: %s\n", err.Error())
-		time.Sleep(wait)
-		wait += g.interval
 	}
 
 	return err

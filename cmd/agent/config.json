@@ -1,5 +1,4 @@
 {
-  "address": "localhost:30011",
   "grpc_port": "4443",
   "report_interval": "2s",
   "poll_interval": "2s",

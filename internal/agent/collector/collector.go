@@ -2,12 +2,13 @@
 package collector
 
 import (
-	"github.com/shirou/gopsutil/v4/cpu"
-	"github.com/shirou/gopsutil/v4/mem"
 	"log"
 	"math/rand/v2"
 	"runtime"
 	"strconv"
+
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/mem"
 
 	"metrics/internal/models"
 )

@@ -4,16 +4,14 @@ package server
 import (
 	"context"
 	"fmt"
-
 	"log"
-
 	"net"
 	"net/http"
-
 	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
+
 	"metrics/internal/server/api"
 	"metrics/internal/server/config"
 	"metrics/internal/server/gRPC"

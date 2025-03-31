@@ -9,14 +9,16 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
-	pb "metrics/internal/server/proto"
-	"metrics/internal/server/utils"
 	"net"
 	"os"
 	"time"
+
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
+
+	pb "metrics/internal/server/proto"
+	"metrics/internal/server/utils"
 )
 
 type GRPCServer struct {
@@ -107,6 +109,8 @@ func (g *GRPCServer) withHash(ctx context.Context, req any,
 			return nil, fmt.Errorf("hash does not match")
 		}
 	}
+
+	//TODO add resp body hash
 
 	return handler(ctx, req)
 }
