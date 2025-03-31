@@ -6,14 +6,17 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"log"
+	"net"
+	"time"
+
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
-	"log"
 	pb "metrics/internal/server/proto"
-	"net"
-	"time"
 )
+
+//TODO WHY CLIENT DOESN'T CALL 4443?
 
 type GRPCClient struct {
 	client   pb.HandlersClient
@@ -103,7 +106,7 @@ func (g *GRPCClient) doWithRetry(ctx context.Context, request *gRPCRequest) erro
 
 	for range g.attempts {
 		fmt.Println("REQYEST", string(request.PostUpdatesRequest.Metrics))
-		_, err = g.client.PostUpdates(ctx, request.PostUpdatesRequest)
+		_, err = g.client.PostUpdates(context.Background(), request.PostUpdatesRequest)
 		if err == nil {
 			return nil
 		}

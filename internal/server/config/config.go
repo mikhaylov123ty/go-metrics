@@ -95,14 +95,14 @@ func New() (*ServerConfig, error) {
 func (s *ServerConfig) parseFlags() {
 	// Базовые флаги
 	flag.StringVar(&s.Host.Address, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
-	flag.StringVar(&s.Host.HTTPPort, "http port", "8080", "Port on which to listen HTTP requests. Example: \"8080\"")
-	flag.StringVar(&s.Host.GRPCPort, "grpc port", "", "Port on which to listen gRPC requests. Example: \"4443\"")
+	flag.StringVar(&s.Host.HTTPPort, "http-port", "8080", "Port on which to listen HTTP requests. Example: \"8080\"")
+	flag.StringVar(&s.Host.GRPCPort, "grpc-port", "", "Port on which to listen gRPC requests. Example: \"4443\"")
 
 	// Флаги логирования
 	flag.StringVar(&s.Logger.LogLevel, "l", "info", "Log level. Example: \"info\"")
 
 	// Флаги файлового хранилища
-	flag.Float64Var(&s.FileStorage.StoreInterval, "i", 0, "Interval in seconds, to store metrics in file.")
+	flag.Float64Var(&s.FileStorage.StoreInterval, "i", 2, "Interval in seconds, to store metrics in file.")
 	flag.StringVar(&s.FileStorage.FileStoragePath, "f", "", "Path to file to store metrics. Example: ./tempFile.txt")
 	flag.BoolVar(&s.FileStorage.Restore, "r", true, "Restore previous metrics from file.")
 

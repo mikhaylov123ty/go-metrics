@@ -1,4 +1,4 @@
-package server
+package utils
 
 import (
 	"crypto/hmac"
@@ -23,7 +23,7 @@ type ResponseData struct {
 // HashResponseWriter - обертка для хэширования
 type HashResponseWriter struct {
 	http.ResponseWriter
-	key string
+	Key string
 }
 
 // GzipWriter - обертка компрессии gzip для интерфейса writer
@@ -34,8 +34,8 @@ type GzipWriter struct {
 
 // Обертка метода Write для хеширования ответа и записи в хедер
 func (w *HashResponseWriter) Write(b []byte) (int, error) {
-	if w.key != "" {
-		hash := getHash(w.key, b)
+	if w.Key != "" {
+		hash := GetHash(w.Key, b)
 		w.ResponseWriter.Header().Set("HashSHA256", hex.EncodeToString(hash))
 	}
 
@@ -74,7 +74,7 @@ func ArrayContains(arr []string, str string) bool {
 }
 
 // Метод создания хэша из сообщения и подписи ключом
-func getHash(key string, msg []byte) []byte {
+func GetHash(key string, msg []byte) []byte {
 	h := hmac.New(sha256.New, []byte(key))
 	h.Write(msg)
 
