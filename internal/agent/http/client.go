@@ -62,7 +62,6 @@ func (h *HTTPClient) PostUpdates(ctx context.Context, body []byte) error {
 	}
 
 	if response.StatusCode() != http.StatusOK {
-		fmt.Println(response.String())
 		return fmt.Errorf("http status code %d", response.StatusCode())
 	}
 
@@ -107,7 +106,6 @@ func (req *httpRequest) doWithRetry(attempts int, url string, interval time.Dura
 
 	// Попытки выполнения запроса и возврат при успешном выполнении
 	for range attempts {
-		fmt.Println("URL:", url)
 		var response *resty.Response
 		response, err = req.Post(url)
 		if err == nil {

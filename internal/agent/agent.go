@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"metrics/pkg"
+
 	"github.com/go-resty/resty/v2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -27,6 +29,7 @@ import (
 )
 
 const (
+	protocol = "http://"
 	attempts = 3
 	interval = 2 * time.Second
 )
@@ -51,14 +54,14 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 	var client UpdatesPoster
 
 	if cfg.Host.GRPCPort != "" {
-		conn, err := grpc.NewClient(":"+cfg.Host.GRPCPort, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		interceptors := grpcClient.NewInterceptors(cfg.Key)
+		conn, err := grpc.NewClient(":"+cfg.Host.GRPCPort, interceptors, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		client = grpcClient.New(pb.NewHandlersClient(conn), cfg.Key, attempts, interval)
+		client = grpcClient.New(pb.NewHandlersClient(conn), attempts, interval)
 	} else {
-		baseURL := "http://" + cfg.Host.String()
+		baseURL := protocol + cfg.Host.String()
 		client = httpClient.New(resty.New(), baseURL, cfg.Key, attempts, interval)
 	}
 
@@ -145,7 +148,7 @@ func (a *Agent) Run(ctx context.Context) {
 							log.Printf("Worker: %d, Failed sending metric: %s", r.worker, r.err.Error())
 							continue
 						}
-						log.Printf(" Worker: %d Metric sent", r.worker)
+						log.Printf("Worker: %d Metric sent", r.worker)
 					}
 				}(res)
 			}
@@ -179,7 +182,9 @@ func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *jobRespons
 			continue
 		}
 
-		if err = a.client.PostUpdates(context.Background(), body); err != nil {
+		// Передача id раннера в запрос
+		ctx := context.WithValue(context.Background(), pkg.ContextKey{}, i)
+		if err = a.client.PostUpdates(ctx, body); err != nil {
 			log.Printf("Worker %d: PostUpdates failed: %s", i, err)
 			result.err = fmt.Errorf("post updates failed: %w", err)
 		}

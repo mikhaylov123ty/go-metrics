@@ -81,7 +81,7 @@ func (s *Server) Start(ctx context.Context, host *config.Host) error {
 		}
 		s.logger.Infof("metrics file storage restored")
 	}
-	fmt.Printf("AUTH: %+v\n", s.auth)
+
 	// Создание группы ожидания
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -106,12 +106,10 @@ func (s *Server) Start(ctx context.Context, host *config.Host) error {
 		}
 	}()
 
-	fmt.Println("AUTH", *s.auth)
-
 	// HTTP Server
 	httpSRV := api.NewServer(host.String(), s.auth.cryptoKey, s.auth.hashKey, s.auth.trustedSubnet, s.services.apiStorageCommands, s.logger)
 
-	// Старт сервера
+	// Старт HTTP сервера
 	go func() {
 		s.logger.Infof("Starting server on %v", host.String())
 		if err := httpSRV.Server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -127,7 +125,7 @@ func (s *Server) Start(ctx context.Context, host *config.Host) error {
 
 	gRPCServer := gRPC.NewServer(s.auth.cryptoKey, s.auth.hashKey, s.auth.trustedSubnet, s.services.gRPCStorageCommands, s.logger)
 
-	// Старт сервера
+	// Старт gRPC сервера
 	go func() {
 		s.logger.Infof("Starting gRPC server on %v", host.GRPCPort)
 		if err = gRPCServer.Server.Serve(listen); err != nil {
@@ -135,14 +133,15 @@ func (s *Server) Start(ctx context.Context, host *config.Host) error {
 		}
 	}()
 
-	// Ожидание сигнала
+	// Ожидание сигнала остановки приложения
 	<-ctx.Done()
 
-	// Остановка сервера
+	// Остановка HTTP сервера
 	if err := httpSRV.Server.Shutdown(ctx); err != nil && err != context.Canceled {
 		log.Fatal("HTTP Server Shutdown Failed:", err)
 	}
 
+	// Остановка gRPC сервера
 	gRPCServer.Server.GracefulStop()
 
 	// Ожидание завершения горутин

@@ -88,9 +88,6 @@ func New() (*ServerConfig, error) {
 		}
 	}
 
-	fmt.Println("ServerConfig:", config)
-	fmt.Println("ServerConfig Store:", *config.FileStorage)
-
 	return config, nil
 }
 

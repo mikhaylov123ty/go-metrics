@@ -41,3 +41,5 @@ func (af AnyFunc) WithRetry() error {
 
 	return fmt.Errorf("failed after %d attempts", attempts)
 }
+
+type ContextKey struct{}

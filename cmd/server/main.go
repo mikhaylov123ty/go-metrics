@@ -7,13 +7,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"metrics/internal/storage"
+
 	"metrics/internal/server"
-	"metrics/internal/server/api"
 	"metrics/internal/server/config"
-	"metrics/internal/server/gRPC"
-	"metrics/internal/server/metrics"
-	"metrics/internal/storage/memory"
-	"metrics/internal/storage/psql"
 	"metrics/pkg/logger"
 )
 
@@ -42,67 +39,14 @@ func main() {
 
 	loggerInstance.Debugf("Config: %+v\n", *cfg)
 
-	// Инициализация инстанса хранения данных
-	var apiStorageCommands *api.StorageCommands
-	var gRPCStorageCommands *gRPC.StorageCommands
-	var metricsFileStorage *metrics.MetricsFileStorage
-	switch {
-	case cfg.DB.Address != "":
-		var psqlStorage *psql.DataBase
-		psqlStorage, err = psql.NewPSQLDataBase(
-			cfg.DB.Address,
-		)
-		if err != nil {
-			log.Fatal("Build Server Storage Connection Error:", err)
-		}
-
-		defer func() {
-			if err = psqlStorage.Instance.Close(); err != nil {
-				loggerInstance.Errorf("Build Server Storage Close Instance Error: %s", err.Error())
-			}
-		}()
-
-		if err = psqlStorage.BootStrap(cfg.DB.Address); err != nil {
-			log.Fatal("Build Server Storage Bootstrap Error:", err)
-		}
-
-		apiStorageCommands = api.NewStorageService(
-			psqlStorage,
-			psqlStorage,
-			psqlStorage,
-		)
-
-		gRPCStorageCommands = gRPC.NewStorageService(
-			psqlStorage,
-			psqlStorage,
-		)
-
-		metricsFileStorage = metrics.NewMetricsFileStorage(psqlStorage, cfg.FileStorage.FileStoragePath)
-		loggerInstance.Info("Storage: postgres")
-
-	default:
-		memStorage := memory.NewMemoryStorage()
-
-		apiStorageCommands = api.NewStorageService(
-			memStorage,
-			memStorage,
-			nil,
-		)
-		gRPCStorageCommands = gRPC.NewStorageService(
-			memStorage,
-			memStorage,
-		)
-
-		metricsFileStorage = metrics.NewMetricsFileStorage(memStorage, cfg.FileStorage.FileStoragePath)
-
-		loggerInstance.Info("Storage: memory")
-	}
-
 	// Инициализация инстанса сервера
+	storageInstance := storage.NewStorage(cfg.DB.Address, cfg.FileStorage.FileStoragePath)
+	defer storageInstance.Closer()
+
 	serverInstance := server.New(
-		apiStorageCommands,
-		gRPCStorageCommands,
-		metricsFileStorage,
+		storageInstance.ApiStorageCommands,
+		storageInstance.GRPCStorageCommands,
+		storageInstance.MetricsFileStorage,
 		loggerInstance,
 		cfg,
 	)
