@@ -20,7 +20,7 @@ import (
 
 	"metrics/internal/agent/collector"
 	"metrics/internal/agent/config"
-	grpcClient "metrics/internal/agent/gRPC"
+	grpcClient "metrics/internal/agent/grpc"
 	httpClient "metrics/internal/agent/http"
 	"metrics/internal/models"
 	pb "metrics/internal/server/proto"
@@ -33,6 +33,7 @@ const (
 	interval = 2 * time.Second
 )
 
+// UpdatesPoster интерфейс отправки метрик для HTTP и gRPC клиентов
 type UpdatesPoster interface {
 	PostUpdates(context.Context, []byte) error
 }

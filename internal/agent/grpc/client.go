@@ -1,4 +1,4 @@
-package gRPC
+package grpc
 
 import (
 	"context"
@@ -20,13 +20,14 @@ import (
 	pb "metrics/internal/server/proto"
 )
 
-// TODO annotations
+// GRPCClient - структура gRPC клиента
 type GRPCClient struct {
 	client   pb.HandlersClient
 	attempts int
 	interval time.Duration
 }
 
+// New собирает gRPC клиент
 func New(client pb.HandlersClient, attempts int, interval time.Duration) *GRPCClient {
 	return &GRPCClient{
 		client:   client,
@@ -35,6 +36,7 @@ func New(client pb.HandlersClient, attempts int, interval time.Duration) *GRPCCl
 	}
 }
 
+// PostUpdates метод реализует интерфейс UpdatesPoster для отправеи метрик
 func (g *GRPCClient) PostUpdates(ctx context.Context, requestData []byte) error {
 	if err := g.doWithRetry(ctx, &pb.PostUpdatesRequest{Metrics: requestData}); err != nil {
 		return fmt.Errorf("PostUpdates: %w", err)
@@ -43,6 +45,7 @@ func (g *GRPCClient) PostUpdates(ctx context.Context, requestData []byte) error 
 	return nil
 }
 
+// NewInterceptors конструктор перезватчиков клиента gRPC
 func NewInterceptors(key string) grpc.DialOption {
 	interceptors := []grpc.UnaryClientInterceptor{
 		withHash(key),
@@ -52,12 +55,12 @@ func NewInterceptors(key string) grpc.DialOption {
 	return grpc.WithChainUnaryInterceptor(interceptors...)
 }
 
-// Middleware для запросов с подписью
+// withHash - перехватчик для вычисления хеша запроса и передача серверу
 func withHash(key string) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req any, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		if key != "" {
 			h := hmac.New(sha256.New, []byte(key))
-			h.Write([]byte(fmt.Sprintf("%s", req.(*pb.PostUpdatesRequest).Metrics)))
+			h.Write(req.(*pb.PostUpdatesRequest).Metrics)
 			hash := hex.EncodeToString(h.Sum(nil))
 
 			ctx = metadata.AppendToOutgoingContext(ctx, "HashSHA256", hash)
@@ -67,6 +70,7 @@ func withHash(key string) grpc.UnaryClientInterceptor {
 	}
 }
 
+// withRealIP - перехватчик для передачи ip адреса клиента
 func withRealIP() grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, req any, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		interfaces, err := net.InterfaceAddrs()
@@ -86,6 +90,7 @@ func withRealIP() grpc.UnaryClientInterceptor {
 	}
 }
 
+// doWithRetry - обертка над интерфейсом PostUpdates для повтора выполнения запроса
 func (g *GRPCClient) doWithRetry(ctx context.Context, request *pb.PostUpdatesRequest) error {
 	var err error
 	wait := 1 * time.Second

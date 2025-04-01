@@ -1,4 +1,4 @@
-package gRPC
+package grpc
 
 import (
 	"context"
@@ -112,7 +112,7 @@ func (g *GRPCServer) withTrustedSubnet(ctx context.Context, req any,
 	return handler(ctx, req)
 }
 
-// withHash - Перехватчик проверяет наличие хеша в метаданных и сверяет с телом запроса
+// withHash - перехватчик проверяет наличие хеша в метаданных и сверяет с телом запроса
 func (g *GRPCServer) withHash(ctx context.Context, req any,
 	info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 	// Проверка наличия флага ключа

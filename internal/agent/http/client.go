@@ -21,7 +21,7 @@ const (
 	batchHandlerPath  = "/updates"
 )
 
-// TODO annotations
+// HTTPClient - структура HTTP клиента
 type HTTPClient struct {
 	client   *resty.Client
 	baseURL  string
@@ -30,10 +30,12 @@ type HTTPClient struct {
 	interval time.Duration
 }
 
+// httpRequest - обертка для создания middleware
 type httpRequest struct {
 	*resty.Request
 }
 
+// New собирает HTTP клиент
 func New(client *resty.Client, baseURL string, key string, attempts int, interval time.Duration) *HTTPClient {
 	return &HTTPClient{
 		client:   client,
@@ -44,6 +46,7 @@ func New(client *resty.Client, baseURL string, key string, attempts int, interva
 	}
 }
 
+// PostUpdates метод реализует интерфейс UpdatesPoster для отправеи метрик
 func (h *HTTPClient) PostUpdates(ctx context.Context, body []byte) error {
 	request := httpRequest{h.client.R().
 		SetHeader("Content-Type", "application/json").
@@ -51,7 +54,7 @@ func (h *HTTPClient) PostUpdates(ctx context.Context, body []byte) error {
 		SetBody(body)}
 	response, err := request.
 		withRealIP().
-		withSign(h.key).
+		withHash(h.key).
 		doWithRetry(h.attempts, h.baseURL+batchHandlerPath, h.interval)
 	if err != nil {
 		return err
@@ -64,8 +67,8 @@ func (h *HTTPClient) PostUpdates(ctx context.Context, body []byte) error {
 	return nil
 }
 
-// Middleware для запросов с подписью
-func (req *httpRequest) withSign(key string) *httpRequest {
+// withHash - middleware для вычисления хеша запроса и передача серверу
+func (req *httpRequest) withHash(key string) *httpRequest {
 	if key != "" {
 		h := hmac.New(sha256.New, []byte(key))
 		h.Write([]byte(fmt.Sprintf("%s", req.Body)))
@@ -77,6 +80,7 @@ func (req *httpRequest) withSign(key string) *httpRequest {
 	return req
 }
 
+// withRealIP - middleware для передачи ip адреса клиента
 func (req *httpRequest) withRealIP() *httpRequest {
 	interfaces, err := net.InterfaceAddrs()
 	if err != nil {
@@ -95,7 +99,7 @@ func (req *httpRequest) withRealIP() *httpRequest {
 	return req
 }
 
-// Middleware повтора функции отправки метрик на сервер
+// doWithRetry - middleware для повтора выполнения запроса
 func (req *httpRequest) doWithRetry(attempts int, url string, interval time.Duration) (*resty.Response, error) {
 	var err error
 	wait := 1 * time.Second

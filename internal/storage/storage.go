@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"metrics/internal/server/api"
-	"metrics/internal/server/gRPC"
+	"metrics/internal/server/grpc"
 	"metrics/internal/server/metrics"
 	"metrics/internal/storage/memory"
 	"metrics/internal/storage/psql"
@@ -12,8 +12,8 @@ import (
 
 // Storage - структура интерфейсов для сервисов сервера
 type Storage struct {
-	ApiStorageCommands  *api.StorageCommands
-	GRPCStorageCommands *gRPC.StorageCommands
+	APIStorageCommands  *api.StorageCommands
+	GRPCStorageCommands *grpc.StorageCommands
 	MetricsFileStorage  *metrics.MetricsFileStorage
 	Closer              func()
 }
@@ -44,14 +44,14 @@ func NewStorage(dsn string, fsPath string) *Storage {
 		}
 
 		// Присвоение интерфейса для сервера HTTP
-		s.ApiStorageCommands = api.NewStorageService(
+		s.APIStorageCommands = api.NewStorageService(
 			psqlStorage,
 			psqlStorage,
 			psqlStorage,
 		)
 
 		// Присвоение интерфейса для сервера gRPC
-		s.GRPCStorageCommands = gRPC.NewStorageService(
+		s.GRPCStorageCommands = grpc.NewStorageService(
 			psqlStorage,
 			psqlStorage,
 		)
@@ -74,14 +74,14 @@ func NewStorage(dsn string, fsPath string) *Storage {
 		memStorage := memory.NewMemoryStorage()
 
 		// Присвоение интерфейса для сервера HTTP
-		s.ApiStorageCommands = api.NewStorageService(
+		s.APIStorageCommands = api.NewStorageService(
 			memStorage,
 			memStorage,
 			nil,
 		)
 
 		// Присвоение интерфейса для сервера gRPC
-		s.GRPCStorageCommands = gRPC.NewStorageService(
+		s.GRPCStorageCommands = grpc.NewStorageService(
 			memStorage,
 			memStorage,
 		)

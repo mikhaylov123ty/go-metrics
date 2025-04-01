@@ -9,7 +9,6 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -25,6 +24,7 @@ import (
 	"metrics/internal/server/utils"
 )
 
+// HTTPServer - структура инстанса HTTP сервера
 type HTTPServer struct {
 	auth   *auth
 	Server *http.Server
@@ -37,6 +37,7 @@ type auth struct {
 	trustedSubnet *net.IPNet
 }
 
+// NewServer создает инстанс HTTP сервера
 func NewServer(address string, cryptoKey string, hashKey string, trustedSubnet *net.IPNet, storageCommands *StorageCommands, logger *logrus.Logger) *HTTPServer {
 	router := chi.NewRouter()
 
@@ -52,8 +53,6 @@ func NewServer(address string, cryptoKey string, hashKey string, trustedSubnet *
 		},
 		logger: logger,
 	}
-
-	fmt.Println("AUTH", *instance.auth)
 
 	// Назначение соответствий хендлеров
 	instance.addHandlers(router, NewHandler(storageCommands))
@@ -97,7 +96,7 @@ func (s *HTTPServer) addHandlers(router *chi.Mux, handler *Handler) {
 	router.Get("/ping", handler.PingGet)
 }
 
-// middleware эндпоинтов для логирования
+// withLogger - middleware логирует запросы
 func (s *HTTPServer) withLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -124,7 +123,29 @@ func (s *HTTPServer) withLogger(next http.Handler) http.Handler {
 	})
 }
 
-// middleware эндпоинтов для компрессии
+// withTrustedSubnet - middleware проверяет подсеть в хедере запроса
+func (s *HTTPServer) withTrustedSubnet(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.auth.trustedSubnet != nil {
+			requestIP := net.ParseIP(r.Header.Get("X-Real-IP"))
+			if requestIP == nil {
+				s.logger.Errorln("error parsing X-Real-IP header")
+				http.Error(w, "error parsing X-Real-IP header", http.StatusForbidden)
+				return
+			}
+
+			if !s.auth.trustedSubnet.Contains(requestIP) {
+				s.logger.Errorln("IP address is not trusted")
+				http.Error(w, "IP address is not trusted", http.StatusForbidden)
+				return
+			}
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// withGZipEncode - middleware для компрессии данных
 func (s *HTTPServer) withGZipEncode(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Accept") != "application/json" && r.Header.Get("Accept") != "text/html" {
@@ -160,7 +181,7 @@ func (s *HTTPServer) withGZipEncode(next http.Handler) http.Handler {
 	})
 }
 
-// middleware для эндпоинтов для хеширования
+// withHash - middleware проверяет наличие хеша в метаданных и сверяет с телом запроса
 func (s *HTTPServer) withHash(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		//Декодирование хедера
@@ -211,7 +232,7 @@ func (s *HTTPServer) withHash(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// Middleware для дешифровки тела запроса
+// withDecrypt - middleware для дешифровки тела запроса при наличии флага приватного ключа
 func (s *HTTPServer) withDecrypt(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// TODO вынести чтение файла в инит конфига
@@ -283,25 +304,4 @@ func (s *HTTPServer) withDecrypt(next http.HandlerFunc) http.HandlerFunc {
 
 		next(w, r)
 	}
-}
-
-func (s *HTTPServer) withTrustedSubnet(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.auth.trustedSubnet != nil {
-			requestIP := net.ParseIP(r.Header.Get("X-Real-IP"))
-			if requestIP == nil {
-				s.logger.Errorln("error parsing X-Real-IP header")
-				http.Error(w, "error parsing X-Real-IP header", http.StatusForbidden)
-				return
-			}
-
-			if !s.auth.trustedSubnet.Contains(requestIP) {
-				s.logger.Errorln("IP address is not trusted")
-				http.Error(w, "IP address is not trusted", http.StatusForbidden)
-				return
-			}
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }

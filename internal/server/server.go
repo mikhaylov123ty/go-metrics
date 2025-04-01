@@ -14,7 +14,7 @@ import (
 
 	"metrics/internal/server/api"
 	"metrics/internal/server/config"
-	"metrics/internal/server/gRPC"
+	"metrics/internal/server/grpc"
 	"metrics/internal/server/metrics"
 )
 
@@ -29,7 +29,7 @@ type Server struct {
 // services - структура команд БД и файла с бэкапом
 type services struct {
 	apiStorageCommands  *api.StorageCommands
-	gRPCStorageCommands *gRPC.StorageCommands
+	gRPCStorageCommands *grpc.StorageCommands
 	metricsFileStorage  *metrics.MetricsFileStorage
 }
 
@@ -48,7 +48,7 @@ type auth struct {
 // New - конструктор инстанса сервера
 func New(
 	apiStorageCommands *api.StorageCommands,
-	gRPCStorageCommands *gRPC.StorageCommands,
+	gRPCStorageCommands *grpc.StorageCommands,
 	metricsFileStorage *metrics.MetricsFileStorage,
 	logger *logrus.Logger,
 	cfg *config.ServerConfig) *Server {
@@ -123,7 +123,7 @@ func (s *Server) Start(ctx context.Context, host *config.Host) error {
 		return fmt.Errorf("gRPC could not listen on %v: %v", host.GRPCPort, err)
 	}
 
-	gRPCServer := gRPC.NewServer(s.auth.cryptoKey, s.auth.hashKey, s.auth.trustedSubnet, s.services.gRPCStorageCommands, s.logger)
+	gRPCServer := grpc.NewServer(s.auth.cryptoKey, s.auth.hashKey, s.auth.trustedSubnet, s.services.gRPCStorageCommands, s.logger)
 
 	// Старт gRPC сервера
 	go func() {

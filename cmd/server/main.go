@@ -44,7 +44,7 @@ func main() {
 	defer storageInstance.Closer()
 
 	serverInstance := server.New(
-		storageInstance.ApiStorageCommands,
+		storageInstance.APIStorageCommands,
 		storageInstance.GRPCStorageCommands,
 		storageInstance.MetricsFileStorage,
 		loggerInstance,
