@@ -12,11 +12,13 @@ import (
 	pb "metrics/internal/server/proto"
 )
 
+// Handler - структура gRPC хендлера
 type Handler struct {
 	pb.UnimplementedHandlersServer
 	storageCommands *StorageCommands
 }
 
+// StorageCommands - команды для взаимодействия с хранилищем
 type StorageCommands struct {
 	dataReader
 	dataUpdater
@@ -32,6 +34,7 @@ type dataUpdater interface {
 	UpdateBatch([]*models.Data) error
 }
 
+// NewHandler - конструктор хендлера
 func NewHandler(gRPCStorageCommands *StorageCommands) *Handler {
 	return &Handler{
 		storageCommands: gRPCStorageCommands,
@@ -47,6 +50,7 @@ func NewStorageService(dataReader dataReader, dataUpdater dataUpdater) *StorageC
 	}
 }
 
+// PostUpdates - хендлер запросав передачи метрик батчами
 func (h *Handler) PostUpdates(ctx context.Context, request *pb.PostUpdatesRequest) (*pb.PostUpdatesResponse, error) {
 	var err error
 	var response pb.PostUpdatesResponse
@@ -55,8 +59,6 @@ func (h *Handler) PostUpdates(ctx context.Context, request *pb.PostUpdatesReques
 	if err = json.Unmarshal(request.Metrics, &storageData); err != nil {
 		return nil, fmt.Errorf("UpdatesPostGRPC failed unmarshall request body: %w", err)
 	}
-
-	// TODO пустая дата тут уже проинициализировни, надо сделать проверку на дефолтное значение
 
 	// Проверка невалидных значений
 	for _, data := range storageData {
