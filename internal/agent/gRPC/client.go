@@ -20,6 +20,7 @@ import (
 	pb "metrics/internal/server/proto"
 )
 
+// TODO annotations
 type GRPCClient struct {
 	client   pb.HandlersClient
 	attempts int

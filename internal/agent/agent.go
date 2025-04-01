@@ -14,8 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"metrics/pkg"
-
 	"github.com/go-resty/resty/v2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -26,6 +24,7 @@ import (
 	httpClient "metrics/internal/agent/http"
 	"metrics/internal/models"
 	pb "metrics/internal/server/proto"
+	"metrics/pkg"
 )
 
 const (

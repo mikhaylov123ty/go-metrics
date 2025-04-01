@@ -21,6 +21,7 @@ const (
 	batchHandlerPath  = "/updates"
 )
 
+// TODO annotations
 type HTTPClient struct {
 	client   *resty.Client
 	baseURL  string
@@ -31,11 +32,6 @@ type HTTPClient struct {
 
 type httpRequest struct {
 	*resty.Request
-}
-
-type httpResponse struct {
-	response *resty.Response
-	err      error
 }
 
 func New(client *resty.Client, baseURL string, key string, attempts int, interval time.Duration) *HTTPClient {
