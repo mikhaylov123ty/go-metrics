@@ -1,6 +1,6 @@
 {
-  "address": "localhost:8080",
-  "report_interval": "1s",
-  "poll_interval": "1s",
+  "grpc_port": "4443",
+  "report_interval": "2s",
+  "poll_interval": "2s",
   "crypto_key": "./cert/cert.pem"
 }

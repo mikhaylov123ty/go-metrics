@@ -1,8 +1,8 @@
 {
-  "address": "localhost:8080",
-  "restore": true,
-  "store_interval": "1s",
+  "grpc_port": "4443",
+  "store_interval": "10s",
   "store_file": "./tempFileFromConfig.txt",
   "database_dsn": "",
-  "crypto_key": "./cert/key.pem"
+  "crypto_key": "./cert/key.pem",
+  "trusted_subnet": "192.168.0.1/24"
 }

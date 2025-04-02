@@ -1,59 +1,72 @@
 // Модуль client реализует бизнес логику агента сбора метрик и передачу на сервер
-package client
+package agent
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
-	"metrics/internal/client/collector"
-	"metrics/internal/client/config"
+	"metrics/internal/agent/collector"
+	"metrics/internal/agent/config"
+	grpcClient "metrics/internal/agent/grpc"
+	httpClient "metrics/internal/agent/http"
 	"metrics/internal/models"
+	pb "metrics/internal/server/proto"
+	"metrics/pkg"
 )
 
 const (
-	singleHandlerPath = "/update"
-	batchHandlerPath  = "/updates"
-
+	protocol = "http://"
 	attempts = 3
 	interval = 2 * time.Second
 )
 
+// UpdatesPoster интерфейс отправки метрик для HTTP и gRPC клиентов
+type UpdatesPoster interface {
+	PostUpdates(context.Context, []byte) error
+}
+
 // Agent - структура агента
 type Agent struct {
-	baseURL        string
-	client         *resty.Client
+	client         UpdatesPoster
 	pollInterval   float64
 	reportInterval float64
 	metrics        []*models.Data
 	statsBuf       collector.StatsBuf
-	key            string
 	rateLimit      int
 	certFile       string
 }
 
 // NewAgent - конструктор агента
 func NewAgent(cfg *config.AgentConfig) *Agent {
-	certPool := x509.NewCertPool()
-	certPool.AppendCertsFromPEM([]byte(cfg.CryptoKey))
+	var client UpdatesPoster
+
+	if cfg.Host.GRPCPort != "" {
+		interceptors := grpcClient.NewInterceptors(cfg.Key)
+		conn, err := grpc.NewClient(":"+cfg.Host.GRPCPort, interceptors, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			log.Fatal(err)
+		}
+		client = grpcClient.New(pb.NewHandlersClient(conn), attempts, interval)
+	} else {
+		baseURL := protocol + cfg.Host.String()
+		client = httpClient.New(resty.New(), baseURL, cfg.Key, attempts, interval)
+	}
+
 	return &Agent{
-		baseURL:        "http://" + cfg.String(),
-		client:         resty.New(),
+		client:         client,
 		pollInterval:   cfg.PollInterval,
 		reportInterval: cfg.ReportInterval,
 		statsBuf: collector.CollectMetrics(
@@ -61,7 +74,6 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 				Data: make(map[string]interface{}),
 			},
 		),
-		key:       cfg.Key,
 		rateLimit: cfg.RateLimit,
 		certFile:  cfg.CryptoKey,
 	}
@@ -74,7 +86,7 @@ func (a *Agent) Run(ctx context.Context) {
 
 	// Создание каналов для связи горутин отправки метрик
 	jobs := make(chan *metricJob)
-	res := make(chan *restyResponse)
+	res := make(chan *jobResponse)
 
 	// Запуск горутины по сбору метрик с интервалом pollInterval
 	go func() {
@@ -93,7 +105,7 @@ func (a *Agent) Run(ctx context.Context) {
 	}()
 
 	// Ограничение рабочих, которые выполняют одновременные запросы к серверу
-	for i := range a.rateLimit - 1 {
+	for i := range a.rateLimit {
 		go a.postWorker(i, jobs, res)
 	}
 
@@ -126,7 +138,7 @@ func (a *Agent) Run(ctx context.Context) {
 				// В интерпретации задания, предполагается, что следующая отрпавка может быть выполнена,
 				// не дожидаясь окончания предыдущей итерации.
 				// Для ожидания достаточно запустить обычное чтение вне горутины.
-				go func(res chan *restyResponse) {
+				go func(res chan *jobResponse) {
 					// Чтение результатов из результирующего канала по количеству заданий
 					// В сценарии с отправкой батчем, количество = 1
 					// В сценарии с отправкой каждой метрики по отдельности = кол-во отправок
@@ -136,7 +148,7 @@ func (a *Agent) Run(ctx context.Context) {
 							log.Printf("Worker: %d, Failed sending metric: %s", r.worker, r.err.Error())
 							continue
 						}
-						log.Printf(" Worker: %d Metric sent, Code: %d, URL: %s, Body: %s\n", r.worker, r.response.StatusCode(), r.response.Request.URL, r.response.Request.Body)
+						log.Printf("Worker: %d Metric sent", r.worker)
 					}
 				}(res)
 			}
@@ -146,7 +158,7 @@ func (a *Agent) Run(ctx context.Context) {
 }
 
 // Метод отправки запроса
-func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyResponse) {
+func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *jobResponse) {
 	var err error
 	for {
 		// Чтение заданий и проверка их наличия в канале
@@ -155,10 +167,9 @@ func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyRespo
 			log.Printf("Worker %d finished", i)
 			return
 		}
-		URL := a.baseURL + data.urlPath
 
 		// Создание ответа для передачи в результирующий канал
-		result := &restyResponse{
+		result := &jobResponse{
 			worker: i,
 		}
 
@@ -171,21 +182,21 @@ func (a *Agent) postWorker(i int, jobs <-chan *metricJob, res chan<- *restyRespo
 			continue
 		}
 
-		// Формирование и выполнение запроса
-		result.response, result.err = withRetry(a.withSign(a.client.R().
-			SetHeader("Content-Type", "application/json").
-			SetHeader("Accept-Encoding", "gzip").
-			SetBody(body)), URL, i)
+		// Передача id раннера в запрос
+		ctx := context.WithValue(context.Background(), pkg.ContextKey{}, i)
+		if err = a.client.PostUpdates(ctx, body); err != nil {
+			log.Printf("Worker %d: PostUpdates failed: %s", i, err)
+			result.err = fmt.Errorf("post updates failed: %w", err)
+		}
 
 		// Запись в результирующий канал
 		res <- result
 	}
 }
 
+// TODO depreciate data to struct
 // Метод отправки метрик батчами
 func (a *Agent) sendMetricsBatch(jobs chan<- *metricJob) error {
-	channelJob := &metricJob{urlPath: batchHandlerPath}
-
 	// Сериализация метрик
 	data, err := json.Marshal(a.metrics)
 	if err != nil {
@@ -193,52 +204,10 @@ func (a *Agent) sendMetricsBatch(jobs chan<- *metricJob) error {
 	}
 
 	// Запись метрик в канал с заданиями
-	channelJob.data = &data
-	jobs <- channelJob
+
+	jobs <- &metricJob{data: &data}
 
 	return nil
-}
-
-// Middleware для запросов с подписью
-func (a *Agent) withSign(request *resty.Request) *resty.Request {
-	if a.key != "" {
-		h := hmac.New(sha256.New, []byte(a.key))
-		h.Write([]byte(fmt.Sprintf("%s", request.Body)))
-		hash := hex.EncodeToString(h.Sum(nil))
-
-		request.SetHeader("HashSHA256", hash)
-	}
-
-	return request
-}
-
-// Middleware повтора функции отправки метрик на сервер
-func withRetry(request *resty.Request, URL string, w int) (*resty.Response, error) {
-	var resp *resty.Response
-	var err error
-	wait := 1 * time.Second
-
-	// Попытки выполнения запроса и возврат при успешном выполнении
-	for range attempts {
-		resp, err = request.Post(URL)
-		if err == nil {
-			return resp, nil
-		}
-
-		// Проверка ошибки для сценария недоступности сервера
-		switch {
-		case errors.Is(err, syscall.ECONNREFUSED):
-			log.Printf("Worker: %d, retrying after error: %s\n", w, err.Error())
-			time.Sleep(wait)
-			wait += interval
-
-		// Возврат ошибки по умолчанию
-		default:
-			return nil, err
-		}
-	}
-
-	return nil, err
 }
 
 // Шифрует тело запроса при наличии флага сертификата

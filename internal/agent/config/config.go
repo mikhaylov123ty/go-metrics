@@ -13,20 +13,24 @@ import (
 
 // AgentConfig - структура конфигурации агента
 type AgentConfig struct {
-	Host           string
-	Port           string
+	Host           *Host
+	ConfigFile     string
 	ReportInterval float64
 	PollInterval   float64
-	Key            string
 	RateLimit      int
+	Key            string
 	CryptoKey      string
-	ConfigFile     string
+}
+type Host struct {
+	Address  string
+	HTTPPort string
+	GRPCPort string
 }
 
 // New - конструктор конфигурации агента
 func New() (*AgentConfig, error) {
 	var err error
-	config := &AgentConfig{}
+	config := &AgentConfig{Host: &Host{}}
 
 	// Парсинг флагов
 	config.parseFlags()
@@ -49,14 +53,15 @@ func New() (*AgentConfig, error) {
 // parseFlags - Парсинг инструкций флагов агента
 func (a *AgentConfig) parseFlags() {
 	// Базовые флаги
-	flag.StringVar(&a.Host, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
-	flag.StringVar(&a.Port, "port", "8080", "Port on which to listen. Example: \"8081\"")
+	flag.StringVar(&a.Host.Address, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
+	flag.StringVar(&a.Host.HTTPPort, "http-port", "8080", "Port on which to listen. Example: \"8080\"")
+	flag.StringVar(&a.Host.GRPCPort, "grpc-port", "", "Port on which to listen gRPC requests. Example: \"4443\"")
 
 	// Флаги интервалов метрик
 	flag.Float64Var(&a.ReportInterval, "r", 0, "Metrics send interval in seconds.")
 	flag.Float64Var(&a.PollInterval, "p", 0, "Metrics update interval in seconds.")
 
-	// Флаги подписи и шифрования
+	// Флаги подписи
 	flag.StringVar(&a.Key, "k", "", "Key")
 
 	// Флаги лимитов запросов
@@ -68,8 +73,8 @@ func (a *AgentConfig) parseFlags() {
 	// Флаг файла конфигурации
 	flag.StringVar(&a.ConfigFile, "config", "", "Config file")
 
-	_ = flag.Value(a)
-	flag.Var(a, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
+	_ = flag.Value(a.Host)
+	flag.Var(a.Host, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
 
 	flag.Parse()
 }
@@ -77,7 +82,7 @@ func (a *AgentConfig) parseFlags() {
 // parseEnv - Парсинг инструкций переменных окружений агента
 func (a *AgentConfig) parseEnv() error {
 	if address := os.Getenv("ADDRESS"); address != "" {
-		if err := a.Set(address); err != nil {
+		if err := a.Host.Set(address); err != nil {
 			return fmt.Errorf("error setting ADDRESS: %w", err)
 		}
 	}
@@ -119,6 +124,10 @@ func (a *AgentConfig) parseEnv() error {
 		a.ConfigFile = config
 	}
 
+	if grpcPort := os.Getenv("GRPC_PORT"); grpcPort != "" {
+		a.Host.GRPCPort = grpcPort
+	}
+
 	return nil
 }
 
@@ -141,7 +150,7 @@ func (a *AgentConfig) initConfigFile() error {
 func (a *AgentConfig) UnmarshalJSON(b []byte) error {
 	var err error
 	var cfg struct {
-		Address        string `json:"address"`
+		GRPCPort       string `json:"grpc_port"`
 		ReportInterval string `json:"report_interval"`
 		PollInterval   string `json:"poll_interval"`
 		CryptoKey      string `json:"crypto_key"`
@@ -151,10 +160,8 @@ func (a *AgentConfig) UnmarshalJSON(b []byte) error {
 		return fmt.Errorf("failed to unmarshal config file: %w", err)
 	}
 
-	if (a.Host == "" && a.Port == "") && cfg.Address != "" {
-		if err = a.Set(cfg.Address); err != nil {
-			return fmt.Errorf("error parsing address: %w", err)
-		}
+	if a.Host.GRPCPort == "" && cfg.GRPCPort != "" {
+		a.Host.GRPCPort = cfg.GRPCPort
 	}
 
 	if a.ReportInterval == 0 && cfg.ReportInterval != "" {
@@ -183,19 +190,19 @@ func (a *AgentConfig) UnmarshalJSON(b []byte) error {
 }
 
 // String реализует интерфейс flag.Value
-func (a *AgentConfig) String() string {
-	return a.Host + ":" + a.Port
+func (h *Host) String() string {
+	return h.Address + ":" + h.HTTPPort
 }
 
 // Set реализует интерфейс flag.Value
-func (a *AgentConfig) Set(value string) error {
+func (h *Host) Set(value string) error {
 	values := strings.Split(value, ":")
 	if len(values) != 2 {
 		return fmt.Errorf("invalid value %q, expected <host:port>:<host:port>", value)
 	}
 
-	a.Host = values[0]
-	a.Port = values[1]
+	h.Address = values[0]
+	h.HTTPPort = values[1]
 
 	return nil
 }

@@ -13,8 +13,8 @@ import (
 
 // MetricsFileStorage - структура для взаимодействия метрик с файлом и хранилищем
 type MetricsFileStorage struct {
-	metricsReaderUpdater
-	fileStorage string
+	storageCommands metricsReaderUpdater
+	fileStorage     string
 }
 
 // metricsReaderUpdater - интерфейс для взаимодействия с БД
@@ -26,15 +26,15 @@ type metricsReaderUpdater interface {
 // NewMetricsFileStorage - конструктор структуры метрик
 func NewMetricsFileStorage(m metricsReaderUpdater, fileStorage string) *MetricsFileStorage {
 	return &MetricsFileStorage{
-		metricsReaderUpdater: m,
-		fileStorage:          fileStorage,
+		storageCommands: m,
+		fileStorage:     fileStorage,
 	}
 }
 
 // StoreMetrics сохраняет метрики в файл
 func (m *MetricsFileStorage) StoreMetrics() error {
 	// Чтение всех метрик из хранилища
-	metrics, err := m.ReadAll()
+	metrics, err := m.storageCommands.ReadAll()
 	if err != nil {
 		return fmt.Errorf("read metrics: %w", err)
 	}
@@ -92,7 +92,7 @@ func (m *MetricsFileStorage) InitMetricsFromFile() error {
 		}
 
 		// Запись в хранилище
-		if err = m.Update(storageData); err != nil {
+		if err = m.storageCommands.Update(storageData); err != nil {
 			return fmt.Errorf("update metrics: %w", err)
 		}
 	}

@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package server_grpc;
+
+option go_package = "internal/server/proto";
+
+//Агент общается с сервером только при передаче батчей,
+//к реализации единственный запрос
+message PostUpdatesRequest {
+  bytes metrics= 1;
+}
+
+message PostUpdatesResponse {
+  string error = 1; // ошибка
+}
+
+service Handlers {
+  rpc PostUpdates(PostUpdatesRequest) returns (PostUpdatesResponse);
+}

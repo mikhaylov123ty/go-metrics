@@ -13,7 +13,7 @@ import (
 
 //TODO разбить по файлам
 
-// Handler - структура хендлера
+// Handler - структура HTTP хендлера
 type Handler struct {
 	storageCommands *StorageCommands
 }
@@ -42,10 +42,10 @@ type pinger interface {
 	Ping() error
 }
 
-// Конструктор хендлера
-func NewHandler(storageCommands *StorageCommands) *Handler {
+// NewHandler - конструктор хендлера
+func NewHandler(apiStorageCommands *StorageCommands) *Handler {
 	return &Handler{
-		storageCommands: storageCommands,
+		storageCommands: apiStorageCommands,
 	}
 }
 

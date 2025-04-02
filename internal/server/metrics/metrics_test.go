@@ -11,7 +11,7 @@ var fileStorage *MetricsFileStorage
 func init() {
 	newMemStorage := memory.NewMemoryStorage()
 	fileStorage = &MetricsFileStorage{
-		metricsReaderUpdater: newMemStorage,
+		storageCommands: newMemStorage,
 	}
 
 }

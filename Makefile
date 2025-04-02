@@ -1,9 +1,8 @@
-SERVER_PORT:=30011
-ADDRESS:="localhost:${SERVER_PORT}"
+SERVER_PORT:="30011"
 AGENT_ARGS:="-config ./cmd/agent/config.json"
 SERVER_ARGS:="-config ./cmd/server/config.json"
 TEMP_FILE:="temp_file"
-DSN = "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
+DSN:="postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
 
 build: buildAgent buildServer
 
@@ -23,7 +22,7 @@ unitTests:
 race:
 	go test -v -race ./...
 
-pre-push: lint runMultichecker buildAgent buildServer unitTests tests cleanup
+pre-push: lint goimports race runMultichecker buildAgent buildServer unitTests tests cleanup
 
 cleanup:
 	rm -f ./cmd/agent/agent && \
@@ -169,3 +168,9 @@ runServerWithFlags:
 generateCert:
 	cd ./cert && \
 	go run main.go
+
+#increment 25
+generateProto:
+	protoc --go_out=. --go_opt=paths=source_relative \
+	  --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+	  internal/server/proto/handlers.proto

@@ -7,12 +7,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"metrics/internal/storage"
+
 	"metrics/internal/server"
-	"metrics/internal/server/api"
 	"metrics/internal/server/config"
-	"metrics/internal/server/metrics"
-	"metrics/internal/storage/memory"
-	"metrics/internal/storage/psql"
 	"metrics/pkg/logger"
 )
 
@@ -39,52 +37,16 @@ func main() {
 		log.Fatal("Build Logger Config Error:", err)
 	}
 
-	// Инициализация инстанса хранения данных
-	var storageCommands *api.StorageCommands
-	switch {
-	case cfg.DB.Address != "":
-		var psqlStorage *psql.DataBase
-		psqlStorage, err = psql.NewPSQLDataBase(
-			cfg.DB.Address,
-		)
-		if err != nil {
-			log.Fatal("Build Server Storage Connection Error:", err)
-		}
-
-		defer func() {
-			if err = psqlStorage.Instance.Close(); err != nil {
-				loggerInstance.Errorf("Build Server Storage Close Instance Error: %s", err.Error())
-			}
-		}()
-
-		if err = psqlStorage.BootStrap(cfg.DB.Address); err != nil {
-			log.Fatal("Build Server Storage Bootstrap Error:", err)
-		}
-
-		storageCommands = api.NewStorageService(
-			psqlStorage,
-			psqlStorage,
-			psqlStorage,
-		)
-		loggerInstance.Info("Storage: postgres")
-
-	default:
-		memStorage := memory.NewMemoryStorage()
-
-		storageCommands = api.NewStorageService(
-			memStorage,
-			memStorage,
-			nil,
-		)
-		loggerInstance.Info("Storage: memory")
-	}
-
-	metricsFileStorage := metrics.NewMetricsFileStorage(storageCommands, cfg.FileStorage.FileStoragePath)
+	loggerInstance.Debugf("Config: %+v\n", *cfg)
 
 	// Инициализация инстанса сервера
+	storageInstance := storage.NewStorage(cfg.DB.Address, cfg.FileStorage.FileStoragePath)
+	defer storageInstance.Closer()
+
 	serverInstance := server.New(
-		storageCommands,
-		metricsFileStorage,
+		storageInstance.APIStorageCommands,
+		storageInstance.GRPCStorageCommands,
+		storageInstance.MetricsFileStorage,
 		loggerInstance,
 		cfg,
 	)
@@ -94,7 +56,7 @@ func main() {
 	defer stop()
 
 	// Запуск сервера
-	if err = serverInstance.Start(ctx, cfg.String()); err != nil {
+	if err = serverInstance.Start(ctx, cfg.Host); err != nil {
 		log.Fatal("Build Server Start Error: ", err)
 	}
 

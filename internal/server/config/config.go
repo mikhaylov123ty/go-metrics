@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -13,14 +14,20 @@ import (
 
 // ServerConfig - структура конфигурации сервера
 type ServerConfig struct {
-	Host        string
-	Port        string
+	Host        *Host
 	Logger      *Logger
 	FileStorage *FileStorage
 	DB          *DB
 	Key         string
 	CryptoKey   string
 	ConfigFile  string
+	Net         *Net
+}
+
+type Host struct {
+	Address  string
+	HTTPPort string
+	GRPCPort string
 }
 
 // Logger - структура конфигруации логгера
@@ -40,10 +47,21 @@ type DB struct {
 	Address string
 }
 
+type Net struct {
+	CIDR          string
+	TrustedSubnet *net.IPNet
+}
+
 // New - конструктор конфигурации сервера
 func New() (*ServerConfig, error) {
 	var err error
-	config := &ServerConfig{Logger: &Logger{}, FileStorage: &FileStorage{}, DB: &DB{}}
+	config := &ServerConfig{
+		Host:        &Host{},
+		Logger:      &Logger{},
+		FileStorage: &FileStorage{},
+		DB:          &DB{},
+		Net:         &Net{},
+	}
 
 	// Парсинг флагов
 	config.parseFlags()
@@ -64,14 +82,21 @@ func New() (*ServerConfig, error) {
 		config.FileStorage.Restore = false
 	}
 
+	if config.Net.CIDR != "" {
+		if err = config.ParseNet(); err != nil {
+			return nil, fmt.Errorf("error parsing CIDR: %w", err)
+		}
+	}
+
 	return config, nil
 }
 
 // Парсинг инструкций флагов сервера
 func (s *ServerConfig) parseFlags() {
 	// Базовые флаги
-	flag.StringVar(&s.Host, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
-	flag.StringVar(&s.Port, "port", "8080", "Port on which to listen. Example: \"8080\"")
+	flag.StringVar(&s.Host.Address, "host", "localhost", "Host on which to listen. Example: \"localhost\"")
+	flag.StringVar(&s.Host.HTTPPort, "http-port", "8080", "Port on which to listen HTTP requests. Example: \"8080\"")
+	flag.StringVar(&s.Host.GRPCPort, "grpc-port", "", "Port on which to listen gRPC requests. Example: \"4443\"")
 
 	// Флаги логирования
 	flag.StringVar(&s.Logger.LogLevel, "l", "info", "Log level. Example: \"info\"")
@@ -93,8 +118,11 @@ func (s *ServerConfig) parseFlags() {
 	// Флаг файла конфигурации
 	flag.StringVar(&s.ConfigFile, "config", "", "Config file")
 
-	_ = flag.Value(s)
-	flag.Var(s, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
+	// Флаг доверенной подсети
+	flag.StringVar(&s.Net.CIDR, "t", "", "Trusted subnet")
+
+	_ = flag.Value(s.Host)
+	flag.Var(s.Host, "a", "Host and port on which to listen. Example: \"localhost:8081\" or \":8081\"")
 
 	flag.Parse()
 }
@@ -103,7 +131,7 @@ func (s *ServerConfig) parseFlags() {
 func (s *ServerConfig) parseEnv() error {
 	var err error
 	if address := os.Getenv("ADDRESS"); address != "" {
-		if err = s.Set(address); err != nil {
+		if err = s.Host.Set(address); err != nil {
 			return err
 		}
 	}
@@ -146,6 +174,14 @@ func (s *ServerConfig) parseEnv() error {
 		s.ConfigFile = config
 	}
 
+	if trustedSubnet := os.Getenv("TRUSTED_SUBNET"); trustedSubnet != "" {
+		s.Net.CIDR = trustedSubnet
+	}
+
+	if grpcPort := os.Getenv("GRPC_PORT"); grpcPort != "" {
+		s.Host.GRPCPort = grpcPort
+	}
+
 	return nil
 }
 
@@ -168,22 +204,21 @@ func (s *ServerConfig) initConfigFile() error {
 func (s *ServerConfig) UnmarshalJSON(b []byte) error {
 	var err error
 	var cfg struct {
-		Address       string `json:"address"`
+		GRPCPort      string `json:"grpc_port"`
 		Restore       bool   `json:"restore"`
 		StoreInterval string `json:"store_interval"`
 		StoreFile     string `json:"store_file"`
 		DatabaseDSN   string `json:"database_dsn"`
 		CryptoKey     string `json:"crypto_key"`
+		TrustedSubnet string `json:"trusted_subnet"`
 	}
 
 	if err = json.Unmarshal(b, &cfg); err != nil {
 		return fmt.Errorf("failed to unmarshal config file: %w", err)
 	}
 
-	if (s.Host == "" && s.Port == "") && cfg.Address != "" {
-		if err = s.Set(cfg.Address); err != nil {
-			return fmt.Errorf("error parsing address: %w", err)
-		}
+	if s.Host.GRPCPort == "" && cfg.GRPCPort != "" {
+		s.Host.GRPCPort = cfg.GRPCPort
 	}
 
 	if !s.FileStorage.Restore && cfg.Restore {
@@ -211,23 +246,37 @@ func (s *ServerConfig) UnmarshalJSON(b []byte) error {
 		s.CryptoKey = cfg.CryptoKey
 	}
 
+	if s.Net.CIDR == "" && cfg.TrustedSubnet != "" {
+		s.Net.CIDR = cfg.TrustedSubnet
+	}
+
+	return nil
+}
+
+func (s *ServerConfig) ParseNet() error {
+	_, ipv4Net, err := net.ParseCIDR(s.Net.CIDR)
+	if err != nil {
+		return fmt.Errorf("invalid CIDR: %w", err)
+	}
+	s.Net.TrustedSubnet = ipv4Net
+
 	return nil
 }
 
 // String реализаует интерфейс flag.Value
-func (s *ServerConfig) String() string {
-	return s.Host + ":" + s.Port
+func (h *Host) String() string {
+	return h.Address + ":" + h.HTTPPort
 }
 
 // Set реализует интерфейса flag.Value
-func (s *ServerConfig) Set(value string) error {
+func (h *Host) Set(value string) error {
 	values := strings.Split(value, ":")
 	if len(values) != 2 {
 		return fmt.Errorf("invalid value %q, expected <host:port>:<host:port>", value)
 	}
 
-	s.Host = values[0]
-	s.Port = values[1]
+	h.Address = values[0]
+	h.HTTPPort = values[1]
 
 	return nil
 }
