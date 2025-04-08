@@ -354,25 +354,25 @@ jobs:
         run: |
           go test -v -race ./...
 
-  test:
-      name: Run tests and collect coverage
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v4
-          with:
-            fetch-depth: 2
+  coveragetest:
+    runs-on: ubuntu-latest
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
   
-        - name: Set up Go
-          uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
   
-        - name: Install dependencies
-          run: go mod download
+      - name: Install dependencies
+        run: go mod download
   
-        - name: Run tests
-          run: go test -coverprofile=coverage.txt ./...
+      - name: Run tests
+        run: go test -coverprofile=coverage.txt ./...
   
-        - name: Upload results to Codecov
-          uses: codecov/codecov-action@v5
-          with:
-            token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload results to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
